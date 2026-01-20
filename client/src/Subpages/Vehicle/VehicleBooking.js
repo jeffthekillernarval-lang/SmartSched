@@ -25,7 +25,7 @@ export default function VehicleBooking() {
         const currentUserId = localStorage.getItem('currentUserId');
 
         const newBooking = {
-            vehicleType: form.vehicleType,
+            vehicle_Type: form.vehicleType,
             requestor: form.requestor,
             department: form.department,
             date: form.date,
@@ -56,7 +56,7 @@ export default function VehicleBooking() {
         }
 
         try {
-            const res = await fetch('http://localhost:5000/api/vehicle-booking', {
+            const res = await fetch('http://localhost:5000/api/create-vehicle-booking', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newBooking),
