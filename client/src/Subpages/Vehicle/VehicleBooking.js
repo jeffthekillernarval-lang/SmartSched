@@ -6,6 +6,12 @@ export default function VehicleBooking() {
     const [bookings, setBookings] = useState([]);
     const [vehicleTypes, setVehicleTypes] = useState([]);
     const [departments, setDepartments] = useState([]);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const currentUserId = localStorage.getItem('currentUserId');
+    useEffect(() => {
+        const storedRole = localStorage.getItem('currentUserRole');
+        setIsAdmin(storedRole === 'admin');
+    }, []);
 
     const [form, setForm] = useState({
         vehicleType: '',
@@ -109,12 +115,28 @@ export default function VehicleBooking() {
     }
 
 
+    // const handleEdit = (index) => {
+    //     setEditingId(index);
+    //     setForm(bookings[index]);
+    //     setShowForm(true);
+    //     window.scrollTo({ top: 0, behavior: 'smooth' });
+    // };
     const handleEdit = (index) => {
-        setEditingId(index);
-        setForm(bookings[index]);
+        const b = bookings[index];
+
+        setEditingId(b.id); // use id, not index
+        setForm({
+            vehicleType: b.vehicleType || b.vehicle_Type || '',
+            requestor: b.requestor || '',
+            department: b.department || '',
+            date: b.date ? b.date.split('T')[0] : '',
+            purpose: b.purpose || ''
+        });
+
         setShowForm(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
     const [filter, setFilter] = useState({
         search: '',
         vehicleType: 'All',
@@ -422,20 +444,49 @@ export default function VehicleBooking() {
                                         day: '2-digit',
                                     })}</td>
                                     <td className="px-6 py-4">{b.purpose}</td>
-                                    <td className="px-1 py-2 flex gap-2">
-                                        <button
-                                            onClick={() => handleEdit(index)}
-                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C] hover:bg-[#f8eaea] transition"
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(index)}
-                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600 hover:bg-red-100 transition"
-                                        >
-                                            Delete
-                                        </button>
-                                    </td>
+                                    {isAdmin ? (
+                                        // ADMIN → show buttons
+                                        <td className="px-1 py-2 flex gap-2">
+                                            <button
+                                                onClick={() => handleEdit(index)}
+                                                className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                            >
+                                                Edit
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(index)}
+                                                className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                            >
+                                                Delete
+                                            </button>
+                                        </td>
+                                    ) : (
+                                        // NOT ADMIN
+                                        parseInt(b.booker_id) === parseInt(currentUserId)
+                                            ? (
+                                                // OWN BOOKING
+                                                <td className="px-1 py-2 flex gap-2">
+                                                    <button
+                                                        onClick={() => handleEdit(index)}
+                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(index)}
+                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </td>
+                                            ) : (
+                                                // OTHER USER
+                                                <td className="px-6 py-4 font-semibold text-[#daa7aa]">
+                                                    Hidden
+                                                </td>
+                                            )
+                                    )}
+
 
                                 </tr>
                             ))
