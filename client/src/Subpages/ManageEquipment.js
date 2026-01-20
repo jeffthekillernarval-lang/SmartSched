@@ -26,15 +26,18 @@ export default function ManageEquipment() {
             if (!bkData.success) throw new Error(bkData.message);
 
             // Merge booking info into equipment list
-            const merged = eqData.equipment.map(eq => {
-                const booking = bkData.bookings.find(b => b.id === eq.booking_id);
-                return {
-                    ...eq,
-                    facility: booking?.facility || 'N/A',
-                    event_name: booking?.event_name || 'N/A',
-                    event_date: booking?.event_date || null
-                };
-            });
+            const merged = eqData.equipment
+                .filter(eq => eq.booking_id !== null) // ⬅️ remove unassigned equipment
+                .map(eq => {
+                    const booking = bkData.bookings.find(b => b.id === eq.booking_id);
+                    return {
+                        ...eq,
+                        facility: booking?.event_facility || 'N/A',
+                        event_name: booking?.event_name || 'N/A',
+                        event_date: booking?.event_date || null
+                    };
+                });
+
 
             setEquipmentList(merged);
         } catch (err) {
@@ -110,6 +113,7 @@ export default function ManageEquipment() {
                                 <th className="p-2 border">Facility</th>
                                 <th className="p-2 border">Event</th>
                                 <th className="p-2 border">Date</th>
+                                {/* <th className="p-2 border">booking id</th> */}
                                 <th className="p-2 border">Action</th>
                             </tr>
                         </thead>
@@ -170,6 +174,7 @@ export default function ManageEquipment() {
                                     <td className="p-2 border">
                                         {eq.event_date ? new Date(eq.event_date).toLocaleDateString() : 'N/A'}
                                     </td>
+                                    {/* <td className="p-2 border">{eq.booking_id}</td> */}
 
                                     {/* ACTION */}
                                     <td className="p-2 border">
