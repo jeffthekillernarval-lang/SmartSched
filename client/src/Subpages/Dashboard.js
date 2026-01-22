@@ -33,6 +33,25 @@ export default function Dashboard({ bookings = [] }) {
             salesData[d.getMonth()].bookings++;
         }
     });
+    const handleDownload = async () => {
+        try {
+            const res = await fetch('http://localhost:5000/api/download-reports', { medthod: 'GET' });
+            const blob = await res.blob();
+
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'bookings_report.csv';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Download failed', err);
+        }
+    };
+
 
     // Line chart: bookings per association/org
     const orgMap = {};
@@ -55,7 +74,8 @@ export default function Dashboard({ bookings = [] }) {
                     <h1 className="text-3xl font-bold text-[#96161C]">DASHBOARD</h1>
                     <p className="text-green-600 mt-1">Welcome to your dashboard</p>
                 </div>
-                <button className="bg-[#96161C] hover:bg-red-700 text-white px-4 py-2 rounded font-semibold mt-4 md:mt-0 shadow-lg border-b-4 border-[#ffb3b3] transition">
+                <button className="bg-[#96161C] hover:bg-red-700 text-white px-4 py-2 rounded font-semibold mt-4 md:mt-0 shadow-lg border-b-4 border-[#ffb3b3] transition"
+                    onClick={handleDownload}>
                     DOWNLOAD REPORTS
                 </button>
             </div>

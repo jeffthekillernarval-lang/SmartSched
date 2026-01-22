@@ -84,13 +84,15 @@ const fetchAllBookingEquipment = require('./routes/booking/fetchBookingEquipment
 const editBookingEquipmentRoute = require('./routes/booking/editBookingEquipment');
 const deleteBookingEquipmentRoute = require('./routes/booking/deleteBookingEquipment');
 
+const downloadAllReportRoute = require('./routes/booking/downloadReports');
+
 // USER
 app.use('/api/create-user', createUserRoute);
 app.use('/api/delete-user', deleteUserRoute);
 app.use('/api/fetchAll-user', fetchAllUserRoute);
 app.use('/api/update-user', updateUserRoute);
 
-
+app.use('/api/download-reports', downloadAllReportRoute);
 
 app.use('/api/fetch-user', fetchUserRoute);
 // CREATE
