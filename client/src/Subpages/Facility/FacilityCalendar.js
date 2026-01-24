@@ -19,6 +19,9 @@ export default function MyCalendar() {
     const [facilities, setFacilities] = useState([]);
     const [orgs, setOrgs] = useState([]);
 
+
+    const [selectedBooking, setSelectedBooking] = useState(null);
+
     const statuses = ['All', 'approved', 'pending', 'rejected', 'rescheduled'];
     function renderEventContent(eventInfo) {
         const bgColor = eventInfo.event.backgroundColor || '#FFD6A5';
@@ -44,6 +47,7 @@ export default function MyCalendar() {
             </div>
         );
     }
+
     useEffect(() => {
         fetch('http://localhost:5000/api/fetch-bookings')
             .then(res => res.json())
@@ -314,9 +318,67 @@ export default function MyCalendar() {
                     selectable={true}
                     events={events}
                     eventContent={renderEventContent}
+                    eventClick={(info) => {
+                        info.jsEvent.preventDefault(); // stop navigation
+                        setSelectedBooking({
+                            id: info.event.extendedProps.id,
+                            title: info.event.title,
+                            date: info.event.startStr.split('T')[0],
+                            start: info.event.startStr.split('T')[1],
+                            end: info.event.endStr.split('T')[1],
+                            facility: info.event.extendedProps.facility,
+                            org: info.event.extendedProps.org,
+                            status: info.event.extendedProps.status,
+                            requestedBy: info.event.extendedProps.requested_by,
+                            contact: info.event.extendedProps.contact,
+                        });
+                    }}
+
                 />
+                {selectedBooking && (
+                    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+                        <div className="bg-white rounded-xl shadow-lg w-[380px] p-5 relative">
+
+                            <button
+                                onClick={() => setSelectedBooking(null)}
+                                className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+                            >
+                                ✕
+                            </button>
+
+                            <h2 className="text-lg font-semibold mb-3">
+                                {selectedBooking.title}
+                            </h2>
+
+                            <div className="space-y-2 text-sm">
+                                <p><span className="font-medium">Date:</span> {selectedBooking.date}</p>
+                                <p>
+                                    <span className="font-medium">Time:</span>{' '}
+                                    {selectedBooking.start} – {selectedBooking.end}
+                                </p>
+                                <p><span className="font-medium">Facility:</span> {selectedBooking.facility}</p>
+                                <p><span className="font-medium">Organization:</span> {selectedBooking.org}</p>
+                                <p><span className="font-medium">Requested by:</span> {selectedBooking.requestedBy}</p>
+                                <p><span className="font-medium">Contact:</span> {selectedBooking.contact}</p>
+
+                                <span
+                                    className={`inline-block mt-2 px-3 py-1 rounded-full text-xs font-semibold
+                                    ${selectedBooking.status === 'approved'
+                                            ? 'bg-green-100 text-green-700'
+                                            : selectedBooking.status === 'rejected'
+                                                ? 'bg-red-100 text-red-700'
+                                                : 'bg-yellow-100 text-yellow-700'}
+                                `}
+                                >
+                                    {selectedBooking.status}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
             </div>
         </div>
+
     );
 }
