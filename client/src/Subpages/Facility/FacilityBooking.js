@@ -31,11 +31,67 @@ export default function Booking() {
     const [deletedEquipmentIds, setDeletedEquipmentIds] = useState([]);
     const [orgSuggestions, setOrgSuggestions] = useState([]);
     const [showOrgSuggestions, setShowOrgSuggestions] = useState(false);
-    const [facilitySuggestions, setFacilitySuggestions] = useState([]);
-    const [showFacilitySuggestions, setShowFacilitySuggestions] = useState(false);
+    // const [facilitySuggestions, setFacilitySuggestions] = useState([]);
+    // const [showFacilitySuggestions, setShowFacilitySuggestions] = useState(false);
     const location = useLocation();
     const [conflictBooking, setConflictBooking] = useState(null);
     const [UserisNotAdmin, setUserisNotAdmin] = useState(false);
+    // const [facilities, setFacilities] = useState([]);
+    // const [facilitySuggestions, setFacilitySuggestions] = useState([]);
+    // const [showFacilitySuggestions, setShowFacilitySuggestions] = useState(false);
+    const [facilitiesList, setFacilitiesList] = useState([]);
+    const [loadingFacilities, setLoadingFacilities] = useState(false);
+    const [facilitiesError, setFacilitiesError] = useState('');
+    const [affiliations, setAffiliations] = useState([]);
+    const [loadingAffiliations, setLoadingAffiliations] = useState(true);
+    const [affiliationsError, setAffiliationsError] = useState('');
+    const [schedules, setSchedules] = useState([
+        { date: '', startTime: '', endTime: '' }
+    ]);
+
+    useEffect(() => {
+        const fetchFacilities = async () => {
+            setLoadingFacilities(true);
+            try {
+                const res = await fetch('http://localhost:5000/api/fetch-facilities');
+                const data = await res.json();
+
+                if (data.success && Array.isArray(data.facilities)) {
+                    setFacilitiesList(data.facilities);
+                } else {
+                    setFacilitiesError('Failed to load facilities');
+                }
+            } catch (err) {
+                console.error(err);
+                setFacilitiesError('Error fetching facilities');
+            } finally {
+                setLoadingFacilities(false);
+            }
+        };
+
+        fetchFacilities();
+    }, []);
+    useEffect(() => {
+        const fetchAffiliations = async () => {
+            try {
+                const res = await fetch('http://localhost:5000/api/fetch-affiliation');
+                const data = await res.json();
+
+                if (data.success && data.affiliations) {
+                    setAffiliations(data.affiliations); // expected [{ abbr, meaning }]
+                } else {
+                    setAffiliationsError('No affiliations found');
+                }
+            } catch (err) {
+                console.error(err);
+                setAffiliationsError('Failed to fetch affiliations');
+            } finally {
+                setLoadingAffiliations(false);
+            }
+        };
+
+        fetchAffiliations();
+    }, []);
 
     useEffect(() => {
         const storedRole = localStorage.getItem('currentUserRole');
@@ -114,21 +170,6 @@ export default function Booking() {
         dateTo: ''
     });
 
-    // Fetch bookings from backend
-    // useEffect(() => {
-    //     fetch('http://localhost:5000/api/fetch-bookings')
-    //         .then(res => res.json())
-    //         .then(data => {
-    //             if (data.success) {
-    //                 setBookings(data.bookings);
-    //             } else {
-    //                 console.log('Fetch bookings failed:', data.message || data.error);
-    //             }
-    //         })
-    //         .catch(err => {
-    //             console.log('Fetch bookings error:', err);
-    //         });
-    // }, []);
     useEffect(() => {
         const storedUserId = localStorage.getItem('currentUserId');
         const storedUserRole = localStorage.getItem('currentUserRole');
@@ -355,7 +396,8 @@ export default function Booking() {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    event_date: form.date,
+                    // event_date: form.date,
+                    schedules,
                     starting_time: form.startTime,
                     ending_time: form.endTime,
                     event_name: form.title,
@@ -363,7 +405,9 @@ export default function Booking() {
                     requested_by: form.requestedBy,
                     organization: form.org,
                     contact: form.contact,
-                    creator_id: currentUserId
+                    creator_id: currentUserId,
+                    reservation: form.bookingType === 'reservation',
+                    insider: form.userType
                 })
             });
 
@@ -593,51 +637,84 @@ export default function Booking() {
                         {/* Date & Time */}
                         <div className="mb-6">
                             <h3 className="font-semibold text-lg mb-3 text-[#96161C]">Date & Time</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Event date*</label>
-                                    <input
-                                        type="date"
-                                        name="date"
-                                        value={form.date}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
-                                        required
-                                        min={!editingId ? getTomorrowDate() : undefined}
-                                    />
 
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Starting time*</label>
-                                    <input
-                                        type="time"
-                                        name="startTime"
-                                        value={form.startTime}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
-                                        required
-                                        min="06:00"
-                                        max="22:00"
-                                    />
-                                </div>
+                            {schedules.map((s, index) => (
+                                <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-3 items-end">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Event date*</label>
+                                        <input
+                                            type="date"
+                                            value={s.date}
+                                            onChange={(e) => {
+                                                const copy = [...schedules];
+                                                copy[index].date = e.target.value;
+                                                setSchedules(copy);
+                                            }}
+                                            className="w-full border rounded-lg px-4 py-2"
+                                            required
+                                        />
+                                    </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium mb-1">Ending time*</label>
-                                    <input
-                                        type="time"
-                                        name="endTime"
-                                        value={form.endTime}
-                                        onChange={handleChange}
-                                        className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
-                                        required
-                                        disabled={!form.startTime}
-                                        min={calculateMinEndTime(form.startTime)}
-                                        max="22:00"
-                                    />
-                                </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Start*</label>
+                                        <input
+                                            type="time"
+                                            value={s.startTime}
+                                            onChange={(e) => {
+                                                const copy = [...schedules];
+                                                copy[index].startTime = e.target.value;
+                                                setSchedules(copy);
+                                            }}
+                                            className="w-full border rounded-lg px-4 py-2"
+                                            required
+                                        />
+                                    </div>
 
-                            </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">End*</label>
+                                        <input
+                                            type="time"
+                                            value={s.endTime}
+                                            onChange={(e) => {
+                                                const copy = [...schedules];
+                                                copy[index].endTime = e.target.value;
+                                                setSchedules(copy);
+                                            }}
+                                            className="w-full border rounded-lg px-4 py-2"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Remove row (except first) */}
+                                    {index > 0 && (
+                                        <button
+                                            type="button"
+                                            className="text-red-600 text-sm"
+                                            onClick={() =>
+                                                setSchedules(schedules.filter((_, i) => i !== index))
+                                            }
+                                        >
+                                            Remove
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+
+                            {/* Duplicate button */}
+                            <button
+                                type="button"
+                                className="mt-2 text-sm font-semibold text-[#96161C]"
+                                onClick={() =>
+                                    setSchedules([
+                                        ...schedules,
+                                        { date: '', startTime: '', endTime: '' }
+                                    ])
+                                }
+                            >
+                                + Add another date
+                            </button>
                         </div>
+
                         {/* Event and Venue */}
                         <div className="mb-6">
                             <h3 className="font-semibold text-lg mb-3 text-[#96161C]">Event and Venue</h3>
@@ -654,57 +731,30 @@ export default function Booking() {
                                         required
                                     />
                                 </div>
-                                <div className="relative">
-                                    <label className="block text-sm font-medium mb-1">Event facility*</label>
-                                    <input
-                                        type="text"
+                                <div>
+                                    <label className="block text-sm font-medium mb-1">Facility*</label>
+                                    <select
                                         name="facility"
                                         value={form.facility}
-                                        onChange={e => {
-                                            const value = e.target.value;
-                                            setForm(prev => ({ ...prev, facility: value }));
-
-                                            if (value.length > 0) {
-                                                const suggestions = facilityList.filter(f =>
-                                                    f.facility.toLowerCase().includes(value.toLowerCase())
-                                                );
-                                                setFacilitySuggestions(suggestions);
-                                                setShowFacilitySuggestions(true);
-                                            } else {
-                                                setShowFacilitySuggestions(false);
-                                            }
-                                        }}
-                                        onBlur={() => setTimeout(() => setShowFacilitySuggestions(false), 100)}
-                                        onFocus={() => {
-                                            if (form.facility.length > 0) setShowFacilitySuggestions(true);
-                                        }}
-                                        placeholder="Gymnasium"
+                                        onChange={(e) =>
+                                            setForm(prev => ({ ...prev, facility: e.target.value }))
+                                        }
                                         className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
                                         required
-                                        autoComplete="off"
-                                    />
-
-                                    {showFacilitySuggestions && facilitySuggestions.length > 0 && (
-                                        <ul className="absolute bg-white border mt-1 rounded-lg w-full max-h-48 overflow-y-auto z-10">
-                                            {facilitySuggestions.map((f, i) => (
-                                                <li
-                                                    key={i}
-                                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
-                                                    onMouseDown={() => {
-                                                        setForm(prev => ({ ...prev, facility: f.facility }));
-                                                        setShowFacilitySuggestions(false);
-                                                    }}
-                                                >
-                                                    {f.facility}
-                                                    <span className="text-gray-500 text-sm ml-2">
-                                                        ({f.capacity}+{f.equipment})
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
+                                    >
+                                        <option value="">Select a facility</option>
+                                        {loadingFacilities && <option disabled>Loading...</option>}
+                                        {facilitiesError && <option disabled>{facilitiesError}</option>}
+                                        {facilitiesList.map((f) => (
+                                            <option key={f.id} value={f.name}>
+                                                {f.name} {/* render only the name, not the object */}
+                                            </option>
+                                        ))}
+                                    </select>
 
                                 </div>
+
+
                             </div>
                         </div>
                         {/* Booker */}
@@ -725,53 +775,22 @@ export default function Booking() {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Org / Dept*</label>
-                                    <input
-                                        type="text"
+                                    <select
                                         name="org"
                                         value={form.org}
-                                        onChange={e => {
-                                            const value = e.target.value;
-                                            setForm(prev => ({ ...prev, org: value }));
-                                            if (value.length > 0) {
-                                                const suggestions = orgAbbreviations.filter(
-                                                    o =>
-                                                        o.abbr.toLowerCase().includes(value.toLowerCase()) ||
-                                                        o.meaning.toLowerCase().includes(value.toLowerCase())
-                                                );
-                                                setOrgSuggestions(suggestions);
-                                                setShowOrgSuggestions(true);
-                                            } else {
-                                                setShowOrgSuggestions(false);
-                                            }
-                                        }}
-                                        onBlur={() => setTimeout(() => setShowOrgSuggestions(false), 100)}
-                                        onFocus={() => {
-                                            if (form.org.length > 0) setShowOrgSuggestions(true);
-                                        }}
-                                        placeholder="AGSO"
+                                        onChange={(e) => setForm(prev => ({ ...prev, org: e.target.value }))}
                                         className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
                                         required
-                                        autoComplete="off"
-                                    />
-                                    {showOrgSuggestions && orgSuggestions.length > 0 && (
-                                        <ul className="absolute z-10 bg-white border border-gray-200 rounded shadow-md mt-1 max-h-48 overflow-y-auto w-full">
-                                            {orgSuggestions.map((o, idx) => (
-                                                <li
-                                                    key={idx}
-                                                    className="px-4 py-2 hover:bg-[#fde8e8] cursor-pointer"
-                                                    onMouseDown={() => {
-                                                        setForm(prev => ({ ...prev, org: o.abbr }));
-                                                        setShowOrgSuggestions(false);
-                                                    }}
-                                                >
-                                                    <span className="font-bold">{o.abbr}</span>
-                                                    {o.abbr && <span className="text-gray-500 ml-2">{o.meaning}</span>}
-                                                    {!o.abbr && <span className="text-gray-500">{o.meaning}</span>}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
+                                    >
+                                        <option value="">Select Org / Dept</option>
+                                        {affiliations.map((o) => (
+                                            <option key={o.id} value={o.abbreviation}>
+                                                {o.abbreviation} - {o.meaning}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
+
                                 <div>
                                     <label className="block text-sm font-medium mb-1">Contact*</label>
                                     <input
@@ -863,6 +882,91 @@ export default function Booking() {
 
 
                                 </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">Type*</label>
+                                    <div className="flex items-center gap-6">
+                                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                                            <input
+                                                type="radio"
+                                                name="bookingType"
+                                                value="booking"
+                                                checked={form.bookingType === 'booking'}
+                                                onChange={(e) =>
+                                                    setForm(prev => ({ ...prev, bookingType: e.target.value }))
+                                                }
+                                                className="h-5 w-5 accent-[#96161C] cursor-pointer"
+                                            />
+                                            <span className="text-sm text-gray-700">Booking</span>
+                                        </label>
+
+                                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                                            <input
+                                                type="radio"
+                                                name="bookingType"
+                                                value="reservation"
+                                                checked={form.bookingType === 'reservation'}
+                                                onChange={(e) =>
+                                                    setForm(prev => ({ ...prev, bookingType: e.target.value }))
+                                                }
+                                                className="h-5 w-5 accent-[#96161C] cursor-pointer"
+                                            />
+                                            <span className="text-sm text-gray-700">Reservation</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+
+                                <div>
+                                    <label className="block text-sm font-medium mb-2">
+                                        <p className='font-medium'>Booker Type*</p>
+                                    </label>
+
+                                    <div className="flex flex-wrap gap-6">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="userType"
+                                                value="student"
+                                                checked={form.userType === 'student'}
+                                                onChange={(e) =>
+                                                    setForm(prev => ({ ...prev, userType: e.target.value }))
+                                                }
+                                                className="h-5 w-5 accent-[#96161C]"
+                                                required
+                                            />
+                                            <span className="text-sm text-gray-700">Student</span>
+                                        </label>
+
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="userType"
+                                                value="employee"
+                                                checked={form.userType === 'employee'}
+                                                onChange={(e) =>
+                                                    setForm(prev => ({ ...prev, userType: e.target.value }))
+                                                }
+                                                className="h-5 w-5 accent-[#96161C]"
+                                            />
+                                            <span className="text-sm text-gray-700">Employee</span>
+                                        </label>
+
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="radio"
+                                                name="userType"
+                                                value="outsider"
+                                                checked={form.userType === 'outsider'}
+                                                onChange={(e) =>
+                                                    setForm(prev => ({ ...prev, userType: e.target.value }))
+                                                }
+                                                className="h-5 w-5 accent-[#96161C]"
+                                            />
+                                            <span className="text-sm text-gray-700">Outsider</span>
+                                        </label>
+                                    </div>
+                                </div>
+
 
                             </div>
                         </div>
@@ -964,20 +1068,26 @@ export default function Booking() {
                                     ))}
                                 </select>
                             </div>
-                            <div className="flex-1 min-w-[140px] max-w-xs">
-                                <label className="block text-xs font-semibold mb-1 text-[#96161C]">Org/Dept</label>
+                            <div>
+                                <label className="block text-sm font-medium mb-1">Org/Dept*</label>
                                 <select
                                     name="org"
-                                    value={filter.org}
-                                    onChange={handleFilterChange}
-                                    className="border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-[#96161C]"
+                                    value={form.org}
+                                    onChange={(e) => setForm(prev => ({ ...prev, org: e.target.value }))}
+                                    className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
+                                    required
                                 >
-                                    <option value="All">All</option>
-                                    {orgs.map(o => (
-                                        <option key={o} value={o}>{o}</option>
+                                    <option value="">Select an Org/Dept</option>
+                                    {affiliations.map((o) => (
+                                        <option key={o.id} value={o.abbreviation}>
+                                            {o.abbreviation} {/* only the abbreviation is rendered */}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
+
+
+
                             <div className="flex-1 min-w-[120px] max-w-xs">
                                 <label className="block text-xs font-semibold mb-1 text-[#96161C]">Date From</label>
                                 <input

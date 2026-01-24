@@ -128,6 +128,32 @@ app.use('/api/vehicle/delete', deleteVehicleBooking);
 app.use('/api/vehicle-conflicts', require('./routes/booking/vehicleConflicts'));
 
 
+// CRUDS
+
+// AFFILIATION  
+const createAffiliationRoute = require('./routes/cruds/createAffiliations');
+app.use('/api/create-affiliation', createAffiliationRoute);
+const fetchAffiliationRoute = require('./routes/cruds/fetchAffiliations');
+app.use('/api/fetch-affiliation', fetchAffiliationRoute);
+
+// VEHICLE
+const createVehicleRoute = require('./routes/cruds/createVehicles');
+app.use('/api/create-vehicle', createVehicleRoute);
+const fetchVehicleRoute = require('./routes/cruds/fetchVehicles');
+app.use('/api/fetch-vehicle', fetchVehicleRoute);
+
+// EQUIPMENT
+const createEquipmentsRoute = require('./routes/cruds/createEquipments');
+app.use('/api/create-equipments', createEquipmentsRoute);
+const fetchEquipmentsRoute = require('./routes/cruds/fetchEquipments');
+app.use('/api/fetch-equipments', fetchEquipmentsRoute);
+
+// FACILITIES
+const createFacilitiesRoute = require('./routes/cruds/createFacilities');
+app.use('/api/create-facilities', createFacilitiesRoute);
+const fetchFacilitiesRoute = require('./routes/cruds/fetchFacilities');
+app.use('/api/fetch-facilities', fetchFacilitiesRoute);
+
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });

@@ -52,10 +52,9 @@ function Login() {
                 </div>
 
                 <div className="flex justify-center self-center z-10">
-                    <div className="p-12 mx-auto rounded-3xl w-96" style={{ backgroundColor: '#96161C' }}>
+                    <div className="p-12 mx-auto rounded-3xl w-96 h-[400px]" style={{ backgroundColor: '#96161C' }}>
                         <div className="mb-7">
                             <h3 className="font-semibold text-2xl text-white">Sign In</h3>
-                            <p className="text-white text-sm">Don’t have an account? Sign Up</p>
                         </div>
 
                         <div className="space-y-6">
@@ -83,7 +82,6 @@ function Login() {
                                 </div>
                             </div>
 
-                            <div className="text-sm text-right text-white">Forgot your password?</div>
 
                             <button
                                 type="button"
@@ -98,17 +96,8 @@ function Login() {
                                 <div className="text-red-500 text-sm text-center">{error}</div>
                             )}
 
-                            <div className="flex items-center justify-center space-x-2 my-5">
-                                <span className="h-px w-16 bg-gray-100"></span>
-                                <span className="text-gray-300 font-normal">or</span>
-                                <span className="h-px w-16 bg-gray-100"></span>
-                            </div>
 
-                            <div className="flex justify-center gap-5">
-                                <button className="w-full flex items-center justify-center border border-gray-300 hover:bg-gray-900 text-sm text-white p-3 rounded-lg font-medium">
-                                    Google
-                                </button>
-                            </div>
+
                         </div>
                     </div>
                 </div>

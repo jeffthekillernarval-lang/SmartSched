@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-    Menu, X, Home, Calendar, ClipboardList, LogOut, User
+    Menu, X, Home, Calendar, ClipboardList, LogOut, User, ScrollText, Hotel, Speaker, Car, UserCog
 } from 'lucide-react';
 
 import Dashboard from '../Subpages/Dashboard';
@@ -13,7 +13,11 @@ import VehicleBooking from '../Subpages/Vehicle/VehicleBooking';
 import VehicleCalendar from '../Subpages/Vehicle/VehicleCalendar';
 import UserManagement from '../Subpages/UserManagement';
 import ManageEquipment from '../Subpages/ManageEquipment';
-
+// ADDITIONALS
+import Affiliations from '../Subpages/Affiliations';
+import Vehicles from '../Subpages/Vehicles';
+import Departments from '../Subpages/Departments';
+import Equipments from '../Subpages/Equipments';
 
 // ✅ Updated helper — now handles both facility & vehicle bookings
 async function sendCohereChatMessage(message, bookingsPayload = {}, currentDateTime) {
@@ -43,6 +47,8 @@ export default function LandingPage() {
     const [chatMessages, setChatMessages] = useState([
         { from: 'bot', text: 'Hi! How can I help you today?' }
     ]);
+    const [isManagementOpen, setIsManagementOpen] = useState(true);
+
 
     const [bookings, setBookings] = useState([]);
     const [vehicleBookings, setVehicleBookings] = useState([]);
@@ -170,6 +176,11 @@ export default function LandingPage() {
         case 'vehicle-calendar': RenderedPage = <VehicleCalendar />; break;
         case 'vehicle-booking': RenderedPage = <VehicleBooking />; break;
         case 'manage-equipment': RenderedPage = <ManageEquipment />; break;
+        // 
+        case 'manage-affiliation': RenderedPage = <Affiliations />; break;
+        case 'manage-department': RenderedPage = <Departments />; break;
+        case 'manage-vehicles': RenderedPage = <Vehicles />; break;
+        case 'manage-allequipment': RenderedPage = <Equipments />; break;
         default: RenderedPage = <Dashboard />;
     }
 
@@ -205,14 +216,71 @@ export default function LandingPage() {
                 </div>
 
                 {/* Sidebar Items */}
-                <nav className="flex flex-col gap-4 text-white">
+                <nav className="flex flex-col gap-2 text-white">
                     {showFacilityBreakdown && (
                         <SidebarItem icon={<Home size={20} />} label="Dashboard" open={isSidebarOpen} onClick={() => handleSetActivePage('dashboard')} />
                     )}
                     <SidebarItem icon={<User size={20} />} label="Profile" open={isSidebarOpen} onClick={() => handleSetActivePage('profile')} />
-                    {user?.role === 'admin' && (
-                        <SidebarItem icon={<User size={20} />} label="User Management" open={isSidebarOpen} onClick={() => handleSetActivePage('user-management')} />
+                    {/* Management Section (group label only, collapsible) */}
+                    {isSidebarOpen && user?.role === 'admin' && (
+                        <>
+                            <button
+                                onClick={() => setIsManagementOpen(!isManagementOpen)}
+                                className="px-2 pt-4 text-xs font-bold text-[#ffa7a7] uppercase tracking-wider text-left w-full"
+                            >
+                                Management {isManagementOpen ? '▾' : '▸'}
+                            </button>
+
+                            {isManagementOpen && (
+                                <>
+                                    {/* Keep each item separate so you can change them later */}
+                                    {user?.role === 'admin' && (
+                                        <SidebarItem
+                                            icon={<UserCog size={20} />}
+                                            label="User Management"
+                                            open={isSidebarOpen}
+                                            onClick={() => handleSetActivePage('user-management')}
+                                        />
+                                    )}
+                                    {user?.role === 'admin' && (
+                                        <SidebarItem
+                                            icon={<ScrollText size={20} />}
+                                            label="Affiliations"
+                                            open={isSidebarOpen}
+                                            onClick={() => handleSetActivePage('manage-affiliation')}
+                                        />
+                                    )}
+                                    {user?.role === 'admin' && (
+                                        <SidebarItem
+                                            icon={<Hotel size={20} />}
+                                            label="Facilities"
+                                            open={isSidebarOpen}
+                                            onClick={() => handleSetActivePage('manage-department')}
+                                        />
+                                    )}
+                                    {user?.role === 'admin' && (
+                                        <SidebarItem
+                                            icon={<Speaker size={20} />}
+                                            label="Equipments"
+                                            open={isSidebarOpen}
+                                            onClick={() => handleSetActivePage('manage-allequipment')}
+                                        />
+                                    )}
+                                    {user?.role === 'admin' && (
+                                        <SidebarItem
+                                            icon={<Car size={20} />}
+                                            label="Vehicles"
+                                            open={isSidebarOpen}
+                                            onClick={() => handleSetActivePage('manage-vehicles')}
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </>
                     )}
+
+
+
 
                     {/* Facility Section */}
                     {isSidebarOpen && (
