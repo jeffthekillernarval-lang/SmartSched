@@ -20,7 +20,10 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     if (!Array.isArray(schedules) || schedules.length === 0) {
-        return res.status(400).json({ success: false, message: 'No schedules provided' });
+        return res.status(400).json({
+            success: false,
+            message: 'No schedules provided'
+        });
     }
 
     const client = await pool.connect();
@@ -32,10 +35,31 @@ router.post('/', async (req, res) => {
 
         for (const s of schedules) {
             const result = await client.query(
-                `INSERT INTO "Booking"
-        (event_date, starting_time, ending_time, event_name, event_facility, requested_by, organization, contact, creator_id, status, reservation, insider)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending',$10,$11)
-        RETURNING id`,
+                `
+                INSERT INTO "Booking" (
+                    event_date,
+                    starting_time,
+                    ending_time,
+                    event_name,
+                    event_facility,
+                    requested_by,
+                    organization,
+                    contact,
+                    creator_id,
+                    status,
+                    reservation,
+                    insider,
+                    booking_fee
+                )
+                VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                    'pending',
+                    $10,
+                    $11,
+                    0
+                )
+                RETURNING id
+                `,
                 [
                     s.date,
                     s.startTime,
@@ -65,12 +89,13 @@ router.post('/', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Create booking error:', err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: 'Server error'
+        });
     } finally {
         client.release();
     }
 });
-
-
 
 module.exports = router;

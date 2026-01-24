@@ -8,32 +8,54 @@ const pool = new Pool({
 
 router.put('/:id', async (req, res) => {
     const {
-        event_date,
-        starting_time,
-        ending_time,
+        schedules, // Expecting an array of schedules
         event_name,
         event_facility,
         requested_by,
         organization,
-        contact
+        contact,
+        booking_fee,
+        bookingType,
+        userType
     } = req.body;
     const { id } = req.params;
+    console.log('Schedules received in request:', schedules); // Debugging: Check schedules in the request
 
     try {
+        // Update the booking with the schedules stored as JSONB
         await pool.query(
             `UPDATE "Booking"
-             SET event_date = $1, starting_time = $2, ending_time = $3, event_name = $4, 
-                 event_facility = $5, requested_by = $6, organization = $7, contact = $8
-             WHERE id = $9`,
-            [event_date, starting_time, ending_time, event_name, event_facility, requested_by, organization, contact, id]
+             SET event_name = $1, 
+                 event_facility = $2,
+                 requested_by = $3,
+                 organization = $4,
+                 contact = $5,
+                 booking_fee = $6,
+                 reservation = $7,
+                 insider = $8,
+                 schedules = $9
+             WHERE id = $10`,
+            [
+                event_name,
+                event_facility,
+                requested_by,
+                organization,
+                contact,
+                booking_fee,
+                bookingType === 'reservation',
+                userType === 'employee', // insider
+                JSON.stringify(schedules), // Store schedules as JSONB
+                id
+            ]
         );
 
-        // Do NOT handle equipment here!
         res.json({ success: true, message: 'Booking updated successfully' });
     } catch (err) {
         console.error('Edit booking error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
+
+
 
 module.exports = router;

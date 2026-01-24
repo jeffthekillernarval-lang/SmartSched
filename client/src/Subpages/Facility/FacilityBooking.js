@@ -46,7 +46,7 @@ export default function Booking() {
     const [loadingAffiliations, setLoadingAffiliations] = useState(true);
     const [affiliationsError, setAffiliationsError] = useState('');
     const [schedules, setSchedules] = useState([
-        { date: '', startTime: '', endTime: '' }
+        { date: '' || null, startTime: '' || null, endTime: '' || null }
     ]);
 
     useEffect(() => {
@@ -155,7 +155,8 @@ export default function Booking() {
         endTime: '',
         requestedBy: '',
         org: '',
-        contact: ''
+        contact: '',
+        booking_fee: 0,
     });
 
     // Pagination state
@@ -396,10 +397,7 @@ export default function Booking() {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    // event_date: form.date,
-                    schedules,
-                    starting_time: form.startTime,
-                    ending_time: form.endTime,
+                    schedules, // Send the schedules array
                     event_name: form.title,
                     event_facility: form.facility,
                     requested_by: form.requestedBy,
@@ -407,40 +405,14 @@ export default function Booking() {
                     contact: form.contact,
                     creator_id: currentUserId,
                     reservation: form.bookingType === 'reservation',
-                    insider: form.userType
+                    insider: form.insider,
+                    booking_fee: form.booking_fee ?? 0
                 })
             });
 
             const data = await response.json();
 
             if (data.success) {
-                const bookingId = editingId ? editingId : data.id;
-
-                // If editing, update equipment using the new endpoint
-                if (editingId) {
-                    await fetch(`http://localhost:5000/api/edit-booking-equipment/${bookingId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            equipment: equipmentRows,
-                            deletedIds: deletedEquipmentIds
-                        })
-                    });
-                } else {
-                    // If creating, add equipment as before
-                    for (const eq of equipmentRows) {
-                        await fetch('http://localhost:5000/api/create-equipment', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                type: eq.type,
-                                quantity: eq.quantity,
-                                booking_id: bookingId
-                            })
-                        });
-                    }
-                }
-
                 alert(editingId ? 'Booking updated successfully' : 'Booking created successfully');
                 fetch('http://localhost:5000/api/fetch-bookings')
                     .then(res => res.json())
@@ -457,17 +429,18 @@ export default function Booking() {
                     endTime: '',
                     requestedBy: '',
                     org: '',
-                    contact: ''
+                    contact: '',
+                    bookingType: 'booking',
+                    insider: 'student',
+                    booking_fee: 0,
                 });
                 setEquipmentRows([]);
                 setEditingId(null);
                 setShowForm(false);
-                // window.location.reload(); // <-- reloads the page
                 return;
             } else {
                 alert(data.message || 'Booking failed');
             }
-
         } catch (err) {
             alert('Server error');
         }
@@ -530,37 +503,44 @@ export default function Booking() {
     };
 
     const handleEdit = (booking) => {
-        setEditingId(booking.id); // capture ID so we know it's edit mode
+        console.log('Editing booking:', booking); // Debugging: Check the booking object
+        console.log('Schedules before mapping:', booking.schedules); // Debugging: Check the schedules field
+
+        setEditingId(booking.id);
+
+        const bookingSchedules = (booking.schedules || []).map((schedule) => ({
+            date: schedule.date || '', // Ensure date is not undefined
+            startTime: schedule.startTime || '', // Ensure startTime is not undefined
+            endTime: schedule.endTime || '', // Ensure endTime is not undefined
+        }));
+
+        console.log('Mapped schedules:', bookingSchedules); // Debugging: Check the mapped schedules
+
+        setSchedules(bookingSchedules);
+
         setForm({
             title: booking.event_name || booking.title || '',
             facility: booking.event_facility || booking.facility || '',
-            date: extractDate(booking.event_date || booking.date || ''),
-            startTime: booking.starting_time || booking.startTime || '',
-            endTime: booking.ending_time || booking.endTime || '',
             requestedBy: booking.requested_by || booking.requestedBy || '',
             org: booking.organization || booking.org || '',
-            contact: booking.contact || ''
+            contact: booking.contact || '',
+            bookingType: booking.reservation ? 'reservation' : 'booking',
+            insider: booking.insider ? 'employee' : booking.userType || 'student',
+            booking_fee: booking.booking_fee ?? 0,
         });
-        // Always fetch latest equipment for this booking and hydrate equipmentRows
-        fetch(`http://localhost:5000/api/fetch-booking-equipment?booking_id=${booking.id}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    setEquipmentRows(data.equipment || []);
-                } else {
-                    setEquipmentRows([]);
-                }
-            })
-            .catch(() => setEquipmentRows([]));
+
         setShowForm(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
+
 
     useEffect(() => {
         // If navigated with an editBookingId, trigger handleEdit
         if (location.state && location.state.editBookingId && bookings.length > 0) {
             const bookingToEdit = bookings.find(b => b.id === location.state.editBookingId);
             if (bookingToEdit) {
+                console.log('Found booking to edit:', bookingToEdit); // Debugging: Check the booking to edit
                 handleEdit(bookingToEdit);
             }
         }
@@ -634,6 +614,9 @@ export default function Booking() {
                         onSubmit={handleSubmit}
                         className="bg-[#f9f9f9] px-8 py-8 rounded-b-xl shadow-md border border-t-0 border-gray-200 w-full"
                     >
+                        {/* Debugging: Check schedules before rendering */}
+                        {console.log('Rendering form with schedules:', schedules)}
+
                         {/* Date & Time */}
                         <div className="mb-6">
                             <h3 className="font-semibold text-lg mb-3 text-[#96161C]">Date & Time</h3>
@@ -644,7 +627,7 @@ export default function Booking() {
                                         <label className="block text-sm font-medium mb-1">Event date*</label>
                                         <input
                                             type="date"
-                                            value={s.date}
+                                            value={s.date} // Bind to schedules array
                                             onChange={(e) => {
                                                 const copy = [...schedules];
                                                 copy[index].date = e.target.value;
@@ -659,7 +642,7 @@ export default function Booking() {
                                         <label className="block text-sm font-medium mb-1">Start*</label>
                                         <input
                                             type="time"
-                                            value={s.startTime}
+                                            value={s.startTime} // Bind to schedules array
                                             onChange={(e) => {
                                                 const copy = [...schedules];
                                                 copy[index].startTime = e.target.value;
@@ -674,7 +657,7 @@ export default function Booking() {
                                         <label className="block text-sm font-medium mb-1">End*</label>
                                         <input
                                             type="time"
-                                            value={s.endTime}
+                                            value={s.endTime} // Bind to schedules array
                                             onChange={(e) => {
                                                 const copy = [...schedules];
                                                 copy[index].endTime = e.target.value;
@@ -925,11 +908,11 @@ export default function Booking() {
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="radio"
-                                                name="userType"
+                                                name="insider"
                                                 value="student"
-                                                checked={form.userType === 'student'}
+                                                checked={form.insider === 'student'}
                                                 onChange={(e) =>
-                                                    setForm(prev => ({ ...prev, userType: e.target.value }))
+                                                    setForm(prev => ({ ...prev, insider: e.target.value }))
                                                 }
                                                 className="h-5 w-5 accent-[#96161C]"
                                                 required
@@ -940,11 +923,11 @@ export default function Booking() {
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="radio"
-                                                name="userType"
+                                                name="insider"
                                                 value="employee"
-                                                checked={form.userType === 'employee'}
+                                                checked={form.insider === 'employee'}
                                                 onChange={(e) =>
-                                                    setForm(prev => ({ ...prev, userType: e.target.value }))
+                                                    setForm(prev => ({ ...prev, insider: e.target.value }))
                                                 }
                                                 className="h-5 w-5 accent-[#96161C]"
                                             />
@@ -954,11 +937,11 @@ export default function Booking() {
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
                                                 type="radio"
-                                                name="userType"
+                                                name="insider"
                                                 value="outsider"
-                                                checked={form.userType === 'outsider'}
+                                                checked={form.insider === 'outsider'}
                                                 onChange={(e) =>
-                                                    setForm(prev => ({ ...prev, userType: e.target.value }))
+                                                    setForm(prev => ({ ...prev, insider: e.target.value }))
                                                 }
                                                 className="h-5 w-5 accent-[#96161C]"
                                             />
@@ -967,7 +950,25 @@ export default function Booking() {
                                     </div>
                                 </div>
 
-
+                                {!UserisNotAdmin && editingId && (
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">
+                                            Booking Fee
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={form.booking_fee}
+                                            onChange={(e) =>
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    booking_fee: Number(e.target.value)
+                                                }))
+                                            }
+                                            className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
                         {/* Actions */}
@@ -1011,6 +1012,7 @@ export default function Booking() {
                         <p><strong>Requested By:</strong> {conflictBooking.requested_by}</p>
                         <p><strong>Contact:</strong> {conflictBooking.contact}</p>
                         <p><strong>Status:</strong> {conflictBooking.status}</p>
+
                     </div>
                 </div>
             )}
@@ -1158,6 +1160,9 @@ export default function Booking() {
                                     </>
                                 )}
                                 <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider">Status</th>
+                                {UserisNotAdmin ?
+                                    // TRUE - USER
+                                    <></> : <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider">Payment</th>}
                                 <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase tracking-wider rounded-tr-xl">Actions</th>
                             </tr>
                         </thead>
@@ -1327,6 +1332,15 @@ export default function Booking() {
                                                 )}
                                             </td>
                                         }
+                                        {UserisNotAdmin ? null : (
+                                            <td className='text-center'>
+                                                <div>
+                                                    {b.booking_fee === null || b.booking_fee === 'default'
+                                                        ? 0
+                                                        : b.booking_fee}
+                                                </div>
+                                            </td>
+                                        )}
 
                                         <td className="px-6 py-4 whitespace-nowrap text-right flex gap-2 justify-center">
                                             <div className='group relative inline-block'>
