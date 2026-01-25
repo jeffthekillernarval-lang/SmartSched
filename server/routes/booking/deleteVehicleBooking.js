@@ -8,7 +8,14 @@ const pool = new Pool({
 
 // PUT /api/vehicle/delete/:id
 router.put('/:id', async (req, res) => {
-    const bookingId = req.params.id;
+    const bookingId = Number(req.params.id);
+
+    if (!bookingId || Number.isNaN(bookingId)) {
+        return res.status(400).json({
+            success: false,
+            message: 'Invalid vehicle booking ID',
+        });
+    }
 
     try {
         const result = await pool.query(
@@ -17,17 +24,23 @@ router.put('/:id', async (req, res) => {
              WHERE id = $1`,
             [bookingId]
         );
-        console.log('hello world');
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, message: 'Vehicle booking not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Vehicle booking not found',
+            });
         }
 
-        res.json({ success: true, message: 'Vehicle booking deleted (soft) successfully' });
+        res.json({
+            success: true,
+            message: 'Vehicle booking deleted (soft) successfully',
+        });
     } catch (err) {
         console.error('Delete vehicle booking error:', err);
         res.status(500).json({ success: false, message: 'Server error' });
     }
 });
+
 
 module.exports = router;

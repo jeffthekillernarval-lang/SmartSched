@@ -18,6 +18,9 @@ import Affiliations from '../Subpages/Affiliations';
 import Vehicles from '../Subpages/Vehicles';
 import Departments from '../Subpages/Departments';
 import Equipments from '../Subpages/Equipments';
+// DASHBOARD    
+import FacilityDashboard from '../Subpages/FacilityDashboard';
+import VehicleDashboard from '../Subpages/VehicleDashboard';
 
 // ✅ Updated helper — now handles both facility & vehicle bookings
 async function sendCohereChatMessage(message, bookingsPayload = {}, currentDateTime) {
@@ -181,6 +184,8 @@ export default function LandingPage() {
         case 'manage-department': RenderedPage = <Departments />; break;
         case 'manage-vehicles': RenderedPage = <Vehicles />; break;
         case 'manage-allequipment': RenderedPage = <Equipments />; break;
+        case 'facility-dashboard': RenderedPage = < FacilityDashboard />; break;
+        case 'vehicle-dashboard': RenderedPage = <VehicleDashboard />; break;
         default: RenderedPage = <Dashboard />;
     }
 
@@ -217,8 +222,14 @@ export default function LandingPage() {
 
                 {/* Sidebar Items */}
                 <nav className="flex flex-col gap-2 text-white">
-                    {showFacilityBreakdown && (
+                    {/* {showFacilityBreakdown && (
                         <SidebarItem icon={<Home size={20} />} label="Dashboard" open={isSidebarOpen} onClick={() => handleSetActivePage('dashboard')} />
+                    )} */}
+                    {showFacilityBreakdown && (
+                        <SidebarItem icon={<Home size={20} />} label="Facility Dashboard" open={isSidebarOpen} onClick={() => handleSetActivePage('facility-dashboard')} />
+                    )}
+                    {showFacilityBreakdown && (
+                        <SidebarItem icon={<Home size={20} />} label="Vehicle Dashboard" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-dashboard')} />
                     )}
                     <SidebarItem icon={<User size={20} />} label="Profile" open={isSidebarOpen} onClick={() => handleSetActivePage('profile')} />
                     {/* Management Section (group label only, collapsible) */}

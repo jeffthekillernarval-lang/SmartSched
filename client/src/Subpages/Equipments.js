@@ -128,6 +128,7 @@ export default function Equipments() {
                             <th className="px-4 py-2">Name</th>
                             <th className="px-4 py-2">Control #</th>
                             <th className="px-4 py-2">Model ID</th>
+                            <th className="px-4 py-2">Actions</th>
                         </tr>
                     </thead>
                     <tbody>

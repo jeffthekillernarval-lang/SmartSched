@@ -129,6 +129,8 @@ app.use('/api/vehicle-conflicts', require('./routes/booking/vehicleConflicts'));
 
 
 // CRUDS
+const updateBookingType = require('./routes/booking/updateBookingType');
+app.use('/api/toggle-reservation', updateBookingType);
 
 // AFFILIATION  
 const createAffiliationRoute = require('./routes/cruds/createAffiliations');
@@ -154,6 +156,9 @@ app.use('/api/create-facilities', createFacilitiesRoute);
 const fetchFacilitiesRoute = require('./routes/cruds/fetchFacilities');
 app.use('/api/fetch-facilities', fetchFacilitiesRoute);
 
+const createRawVehicleBooking = require('./routes/booking/createRawVehicleBooking');
+app.use('/api/create-raw-vehicle-booking', createRawVehicleBooking);
+
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });
@@ -161,4 +166,15 @@ app.listen(port, () => {
 app.use((req, res) => {
     console.log("[404] Route not found:", req.method, req.originalUrl);
     res.status(404).json({ success: false, message: "Route not found" });
+});
+
+app.get('/api/bookings', async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM "Booking"'); // Adjust query as needed
+        console.log("Bookings fetched from database:", result.rows); // Debugging log
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Error fetching bookings:", err);
+        res.status(500).json({ success: false, message: "Failed to fetch bookings" });
+    }
 });

@@ -114,7 +114,6 @@ export default function VehicleBooking() {
             .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
     }
 
-
     // const handleEdit = (index) => {
     //     setEditingId(index);
     //     setForm(bookings[index]);
