@@ -53,47 +53,37 @@ export default function MyCalendar() {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    const formatted = data.bookings.map(b => {
-                        const dateOnly = b.event_date.split('T')[0]; // ensures YYYY-MM-DD only
-                        const dateObj = new Date(dateOnly);
-                        dateObj.setDate(dateObj.getDate() + 1);
-                        const NewDate = dateObj.toISOString().split('T')[0];
-                        // Set color based on status
-                        let bgColor = '#FFD6A5'; // pastel orange for "Other"
-                        let borderColor = '#FFD6A5';
-                        let textColor = '#000000';
+                    const formatted = data.bookings
+                        .filter(b => b.event_date) // only keep bookings with a valid date
+                        .map(b => {
+                            const dateOnly = b.event_date.split('T')[0]; // safe now
+                            const startTime = b.starting_time || '00:00';
+                            const endTime = b.ending_time || '23:59';
 
-                        if (b.status === 'approved') {
-                            bgColor = '#A8E6CF'; // pastel green
-                            borderColor = '#A8E6CF';
-                            textColor = '#000000';
-                        } else if (b.status === 'pending') {
-                            bgColor = '#FFF9B0'; // pastel yellow
-                            borderColor = '#FFF9B0';
-                            textColor = '#000000';
-                        } else if (b.status === 'rejected') {
-                            bgColor = '#FFB3B3'; // pastel red
-                            borderColor = '#FFB3B3';
-                            textColor = '#000000';
-                        } else if (b.status === 'rescheduled') {
-                            bgColor = '#B3E5FC'; // pastel blue
-                            borderColor = '#B3E5FC';
-                            textColor = '#000000';
-                        }
-                        return {
-                            title: b.event_name || 'Untitled Event',
-                            start: `${NewDate}T${b.starting_time}`,
-                            end: `${NewDate}T${b.ending_time}`,
-                            backgroundColor: bgColor,
-                            borderColor: borderColor,
-                            textColor: textColor,
-                            extendedProps: {
-                                status: b.status,
-                                facility: b.event_facility,
-                                org: b.organization
-                            }
-                        };
-                    });
+                            // Set colors
+                            let bgColor = '#FFD6A5';
+                            if (b.status === 'approved') bgColor = '#A8E6CF';
+                            else if (b.status === 'pending') bgColor = '#FFF9B0';
+                            else if (b.status === 'rejected') bgColor = '#FFB3B3';
+                            else if (b.status === 'rescheduled') bgColor = '#B3E5FC';
+
+                            return {
+                                title: b.event_name || 'Untitled Event',
+                                start: `${dateOnly}T${startTime}`,
+                                end: `${dateOnly}T${endTime}`,
+                                backgroundColor: bgColor,
+                                borderColor: bgColor,
+                                textColor: '#000',
+                                extendedProps: {
+                                    status: b.status,
+                                    facility: b.event_facility || '',
+                                    org: b.organization || '',
+                                    requestedBy: b.requested_by || '',
+                                    contact: b.contact || ''
+                                }
+                            };
+                        });
+
                     setBookings(formatted);
                     setEvents(formatted);
 

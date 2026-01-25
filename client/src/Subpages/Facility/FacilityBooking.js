@@ -3,7 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { orgAbbreviations } from '../../constants/OrgAbbreviations';
 import { orgAbbreviations as facilityList } from '../../constants/FacilitiesListing';
 import { useLocation } from 'react-router-dom';
-import BookingSummary from "../BookingSummary";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+// import BookingSummary from "../BookingSummary";
+import {
+    X,
+    Calendar,
+    Clock,
+    Building,
+    User,
+    Users,
+    Phone,
+    Wrench,
+    Car,
+    Settings
+} from "lucide-react";
 function formatTime(timeStr) {
     if (!timeStr) return '';
     // Handles "HH:mm" or "HH:mm:ss"
@@ -17,51 +31,114 @@ function formatTime(timeStr) {
 }
 
 export default function Booking() {
+    const location = useLocation();
     const navigate = useNavigate();
-    const [showForm, setShowForm] = useState(true);
-    const [bookings, setBookings] = useState([]);
-    const [filtered, setFiltered] = useState([]);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [rowsPerPage, setRowsPerPage] = useState(10);
-    const [equipmentRows, setEquipmentRows] = useState([]);
-    const [editStatusIndex, setEditStatusIndex] = useState(null);
-    const [showFacilityBreakdown, setShowFacilityBreakdown] = useState(false);
     const [user, setUser] = useState(null);
     const [userId, setUserId] = useState(null);
-    const [showRequesterInfo, setShowRequesterInfo] = useState(false);
-    const [equipmentMap, setEquipmentMap] = useState({});
-    const [deletedEquipmentIds, setDeletedEquipmentIds] = useState([]);
-    const [selectedBooking, setSelectedBooking] = useState(null);
-    const [showBookingSummary, setShowBookingSummary] = useState(false);
-
-    // const [orgSuggestions, setOrgSuggestions] = useState([]);
-    // const [showOrgSuggestions, setShowOrgSuggestions] = useState(false);
-    // const [facilitySuggestions, setFacilitySuggestions] = useState([]);
-    // const [showFacilitySuggestions, setShowFacilitySuggestions] = useState(false);
-    const location = useLocation();
-    const [conflictBooking, setConflictBooking] = useState(null);
-    const [UserisNotAdmin, setUserisNotAdmin] = useState(false);
-    // const [facilities, setFacilities] = useState([]);
-    // const [facilitySuggestions, setFacilitySuggestions] = useState([]);
-    // const [showFacilitySuggestions, setShowFacilitySuggestions] = useState(false);
-    const [facilitiesList, setFacilitiesList] = useState([]);
-    const [loadingFacilities, setLoadingFacilities] = useState(false);
-    const [facilitiesError, setFacilitiesError] = useState('');
+    const [bookings, setBookings] = useState([]);
+    const [filtered, setFiltered] = useState([]);
+    const [showForm, setShowForm] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [vehicleType, setVehicleType] = useState('');
+    const [rowsPerPage, setRowsPerPage] = useState(10);
     const [affiliations, setAffiliations] = useState([]);
-    const [loadingAffiliations, setLoadingAffiliations] = useState(true);
+    const [equipmentMap, setEquipmentMap] = useState({});
+    const [showVehicle, setShowVehicle] = useState(false);
+    const [equipmentRows, setEquipmentRows] = useState([]);
+    const [equipmentList, setEquipmentList] = useState([]);
+    const [equipmentError, setEquipmentError] = useState('');
+    const [facilitiesList, setFacilitiesList] = useState([]);
+    const [facilitiesError, setFacilitiesError] = useState('');
+    const [UserisNotAdmin, setUserisNotAdmin] = useState(false);
+    const [editStatusIndex, setEditStatusIndex] = useState(null);
+    const [selectedBooking, setSelectedBooking] = useState(null);
+    const [conflictBooking, setConflictBooking] = useState(null);
+    const [showVehicleForm, setShowVehicleForm] = useState(false);
     const [affiliationsError, setAffiliationsError] = useState('');
+    const [equipmentLoading, setEquipmentLoading] = useState(false);
+    const [editReservationId, setEditReservationId] = useState(null);
+    const [showRequesterInfo, setShowRequesterInfo] = useState(false);
+    const [loadingFacilities, setLoadingFacilities] = useState(false);
+    const [deletedEquipmentIds, setDeletedEquipmentIds] = useState([]);
+    const [showBookingSummary, setShowBookingSummary] = useState(false);
+    const [loadingAffiliations, setLoadingAffiliations] = useState(true);
+    const [showFacilityBreakdown, setShowFacilityBreakdown] = useState(false);
+
     const [schedules, setSchedules] = useState([
         { date: '' || null, startTime: '' || null, endTime: '' || null }
     ]);
-    const [equipmentList, setEquipmentList] = useState([]);
-    const [equipmentLoading, setEquipmentLoading] = useState(false);
-    const [equipmentError, setEquipmentError] = useState('');
 
-    const [editReservationId, setEditReservationId] = useState(null);
-    const [showVehicleForm, setShowVehicleForm] = useState(false);
+    const downloadReceipt = () => {
+        if (!booking) return;
 
-    const [vehicleType, setVehicleType] = useState('');
-    const [showVehicle, setShowVehicle] = useState(false);
+        const doc = new jsPDF("p", "mm", "a4");
+        const left = 15; // left margin
+        let y = 20; // starting vertical position
+
+        doc.setFontSize(18);
+        doc.text("Facility & Vehicle Booking Receipt", 105, y, { align: "center" });
+        y += 10;
+
+        doc.setFontSize(12);
+        doc.text(`Event: ${booking.event_name || booking.title}`, left, y);
+        y += 8;
+        doc.text(`Facility: ${booking.event_facility || booking.facility}`, left, y);
+        y += 8;
+        doc.text(`Organization: ${booking.organization || booking.org}`, left, y);
+        y += 8;
+        doc.text(`Requested By: ${booking.requested_by || booking.requestedBy}`, left, y);
+        y += 8;
+        doc.text(`Contact: ${booking.contact}`, left, y);
+        y += 8;
+        doc.text(`Date: ${booking.event_date || booking.date}`, left, y);
+        y += 8;
+        doc.text(`Time: ${booking.starting_time || booking.start} – ${booking.ending_time || booking.end}`, left, y);
+        y += 15;
+
+        // Vehicles
+        if (vehicles.length > 0) {
+            doc.setFontSize(14);
+            doc.text("Vehicle Reservations:", left, y);
+            y += 8;
+            doc.setFontSize(12);
+            vehicles.forEach((v, idx) => {
+                doc.text(`${idx + 1}. ${v.vehicle_type || "Unknown"} - ${v.plate_number || "N/A"}`, left + 5, y);
+                y += 7;
+            });
+            y += 5;
+        }
+
+        // Equipment
+        if (equipment.length > 0) {
+            doc.setFontSize(14);
+            doc.text("Equipment Reservations:", left, y);
+            y += 8;
+            doc.setFontSize(12);
+            equipment.forEach((eq, idx) => {
+                doc.text(`${idx + 1}. ${eq.type || "Unknown"} - ${eq.quantity || 0}×`, left + 5, y);
+                y += 7;
+            });
+            y += 5;
+        }
+
+        // Signatures
+        y += 10;
+        doc.text("__________________________", left, y);
+        doc.text("Requested By", left, y + 6);
+        doc.text("__________________________", 130, y);
+        doc.text("Approved By (President)", 130, y + 6);
+
+        // Save PDF
+        doc.save(`${booking.event_name || "booking"}-receipt.pdf`);
+    };
+    // const vehicleBookings = {
+    //     [selectedBooking.id]: [''] // or array of vehicle bookings
+    // };
+    const booking = selectedBooking ?? null;
+    const bookingId = booking?.id ?? null;
+    const vehicles = booking?.vehicles ?? [];
+    const equipment = bookingId ? equipmentMap?.[bookingId] ?? [] : [];
+
     const handleReservationChange = async (bookingId, value) => {
         try {
             const res = await fetch(`http://localhost:5000/api/toggle-reservation/${bookingId}`, {
@@ -97,63 +174,6 @@ export default function Booking() {
             .catch(() => setEquipmentError('Failed to load equipment'))
             .finally(() => setEquipmentLoading(false));
     }, []);
-
-    // const handleAddVehicle = async () => {
-    //     if (!vehicleForm.vehicleType) {
-    //         alert('Please select a vehicle type');
-    //         return;
-    //     }
-
-    //     const currentUserId = localStorage.getItem('currentUserId');
-
-    //     const payload = {
-    //         vehicle_Type: vehicleForm.vehicleType,
-    //         requestor: form.requestor,
-    //         department: form.department,
-    //         date: form.event_date || form.date, // reuse booking date
-    //         purpose: form.purpose,
-    //         booker_id: Number(currentUserId),
-    //     };
-
-    //     try {
-    //         // 1️⃣ check conflicts
-    //         const conflictRes = await fetch(
-    //             `http://localhost:5000/api/vehicle-conflicts?vehicleType=${encodeURIComponent(payload.vehicle_Type)}&date=${encodeURIComponent(payload.date)}`
-    //         );
-    //         const conflictData = await conflictRes.json();
-
-    //         if (conflictData.success && conflictData.bookings.length > 0) {
-    //             alert('Vehicle already booked on this date.');
-    //             return;
-    //         }
-
-    //         // 2️⃣ create vehicle booking
-    //         const res = await fetch(
-    //             'http://localhost:5000/api/create-vehicle-booking',
-    //             {
-    //                 method: 'POST',
-    //                 headers: { 'Content-Type': 'application/json' },
-    //                 body: JSON.stringify(payload),
-    //             }
-    //         );
-
-    //         const data = await res.json();
-
-    //         if (!data.success) {
-    //             throw new Error(data.message);
-    //         }
-
-    //         alert('Vehicle booked successfully');
-
-    //         // reset vehicle-only state
-    //         setVehicleForm({ vehicleType: '' });
-    //         setShowVehicleForm(false);
-
-    //     } catch (err) {
-    //         console.error(err);
-    //         alert('Failed to book vehicle');
-    //     }
-    // };
 
     useEffect(() => {
         const fetchFacilities = async () => {
@@ -247,6 +267,18 @@ export default function Booking() {
             console.error(`Error fetching equipment for booking ${bookingId}:`, err);
         }
     };
+
+    const InfoItem = ({ icon, label, value }) => (
+        <div className="flex gap-4">
+            <div className="text-gray-500 mt-1">
+                {React.cloneElement(icon, { size: 18 })}
+            </div>
+            <div>
+                <p className="text-sm text-gray-500">{label}</p>
+                <p className="text-base font-medium text-gray-900">{value}</p>
+            </div>
+        </div>
+    );
 
 
 
@@ -569,6 +601,24 @@ export default function Booking() {
         } catch (err) {
             alert('Server error');
         }
+    };
+
+    const ActionButton = ({ label, variant = "default", disabled }) => {
+        const base = "px-4 py-1.5 rounded-md text-sm font-medium transition focus:outline-none";
+        const styles = {
+            default: "bg-blue-100 text-blue-800 hover:bg-blue-200",
+            warning: "bg-yellow-100 text-yellow-800 hover:bg-yellow-200",
+            danger: "bg-red-100 text-red-800 hover:bg-red-200",
+        };
+
+        return (
+            <button
+                disabled={disabled}
+                className={`${base} ${styles[variant]} ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+            >
+                {label}
+            </button>
+        );
     };
 
 
@@ -1698,40 +1748,177 @@ export default function Booking() {
                             )}
                         </tbody>
                     </table>
-                    {showBookingSummary && selectedBooking && (
-                        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-                            <div className="bg-white rounded-xl shadow-lg p-6 w-11/12 max-w-xl relative">
-                                <button
-                                    className="absolute top-3 right-3 text-gray-500 hover:text-gray-900"
-                                    onClick={() => setShowBookingSummary(false)}
-                                >
-                                    ✕
-                                </button>
+                    <div
+                        id="booking-summary-content"
+                        className="relative w-[95vw] max-w-6xl bg-white rounded-2xl shadow-xl"
+                    >
+                        {showBookingSummary && booking && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                                <div className="relative w-[95vw] max-w-6xl bg-white rounded-2xl shadow-xl">
 
-                                <h2 className="text-xl font-bold mb-4">{selectedBooking.event_name || selectedBooking.title}</h2>
-                                <p><strong>Facility:</strong> {selectedBooking.event_facility || selectedBooking.facility}</p>
-                                <p><strong>Date:</strong> {selectedBooking.event_date || selectedBooking.date}</p>
-                                <p><strong>Time:</strong> {selectedBooking.starting_time} - {selectedBooking.ending_time}</p>
-                                <p><strong>Requested By:</strong> {selectedBooking.requested_by}</p>
-                                <p><strong>Organization:</strong> {selectedBooking.organization || selectedBooking.org}</p>
-                                <p><strong>Contact:</strong> {selectedBooking.contact}</p>
+                                    {/* Close */}
+                                    <button
+                                        onClick={() => setShowBookingSummary(false)}
+                                        className="absolute top-4 right-4 p-2 rounded-full text-gray-500 hover:bg-gray-100"
+                                    >
+                                        <X size={22} />
+                                    </button>
 
-                                {equipmentMap[selectedBooking.id]?.length > 0 && (
-                                    <div className="mt-4">
-                                        <strong>Equipment:</strong>
-                                        <ul className="list-disc list-inside">
-                                            {equipmentMap[selectedBooking.id].map((eq, idx) => (
-                                                <li key={idx}>{eq.quantity}x {eq.type}</li>
-                                            ))}
-                                        </ul>
+                                    {/* Header */}
+                                    <div className="px-10 py-6 border-b">
+                                        <h2 className="text-3xl font-semibold text-gray-900">
+                                            {booking.event_name || booking.title}
+                                        </h2>
+                                        <p className="text-gray-600 mt-1">
+                                            Facility & Vehicle Booking Summary
+                                        </p>
                                     </div>
-                                )}
+
+                                    {/* Body */}
+                                    <div className="px-10 py-8 grid grid-cols-1 lg:grid-cols-2 gap-10">
+
+                                        {/* LEFT — FACILITY */}
+                                        <section>
+                                            <h3 className="text-xl font-semibold text-gray-900 mb-5">
+                                                Facility Details
+                                            </h3>
+
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-10">
+                                                <InfoItem icon={<Building />} label="Facility"
+                                                    value={booking.event_facility || booking.facility} />
+
+                                                <InfoItem icon={<Calendar />} label="Date"
+                                                    value={booking.event_date || booking.date} />
+
+                                                <InfoItem icon={<Clock />} label="Time"
+                                                    value={`${booking.starting_time} – ${booking.ending_time}`} />
+
+                                                <InfoItem icon={<User />} label="Requested By"
+                                                    value={booking.requested_by} />
+
+                                                <InfoItem icon={<Users />} label="Organization"
+                                                    value={booking.organization || booking.org} />
+
+                                                <InfoItem icon={<Phone />} label="Contact"
+                                                    value={booking.contact} />
+                                            </div>
+
+                                            <div className="mt-8">
+                                                <div className="flex items-center gap-2 mb-3 text-gray-800 font-semibold">
+                                                    <Wrench size={20} />
+                                                    Equipment
+                                                </div>
+
+                                                {equipment.length > 0 ? (
+                                                    <div className="rounded-lg bg-gray-50 p-4">
+                                                        {equipment.map((eq, idx) => (
+                                                            <div
+                                                                key={idx}
+                                                                className="flex justify-between py-2 border-b last:border-none"
+                                                            >
+                                                                <span>{eq?.type ?? "Unknown"}</span>
+                                                                <span className="font-medium">{eq?.quantity ?? 0}×</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-gray-500 italic">
+                                                        No equipment booked
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </section>
+
+                                        {/* RIGHT — VEHICLES + ACTIONS */}
+                                        <section className="flex flex-col gap-10">
+
+                                            {/* Vehicles */}
+                                            <div>
+                                                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                                    <Car size={20} />
+                                                    Vehicle Reservations
+                                                </h3>
+
+                                                {vehicles.length > 0 ? (
+                                                    <div className="rounded-lg bg-gray-50 divide-y">
+                                                        {vehicles.map((v, idx) => (
+                                                            <div
+                                                                key={idx}
+                                                                className="flex justify-between px-4 py-3"
+                                                            >
+                                                                <span>{v?.vehicle_type ?? "Unknown vehicle"}</span>
+                                                                <span className="text-gray-700">
+                                                                    {v?.plate_number ?? "N/A"}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-gray-500 italic">
+                                                        No vehicle reservations
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div>
+                                                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                                    <Settings size={20} />
+                                                    Actions
+                                                </h3>
+
+                                                <div className="space-y-6">
+
+                                                    {/* Facility Actions */}
+                                                    <div>
+                                                        <p className="font-medium text-gray-700 mb-2">
+                                                            Facility Booking
+                                                        </p>
+                                                        <div className="flex gap-2">
+                                                            <ActionButton label="Edit" />
+                                                            <ActionButton label="Cancel" variant="warning" />
+                                                            <ActionButton label="Delete" variant="danger" />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Vehicle Actions */}
+                                                    <div>
+                                                        <p className="font-medium text-gray-700 mb-2">
+                                                            Vehicle Booking
+                                                        </p>
+                                                        <div className="flex gap-2">
+                                                            <ActionButton label="Edit" disabled={!vehicles.length} />
+                                                            <ActionButton label="Cancel" variant="warning" disabled={!vehicles.length} />
+                                                            <ActionButton label="Delete" variant="danger" disabled={!vehicles.length} />
+                                                        </div>
+                                                    </div>
+
+                                                </div>
+                                            </div>
+
+                                        </section>
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="px-10 py-5 border-t flex justify-end">
+                                        <button
+                                            onClick={() => setShowBookingSummary(false)}
+                                            className="px-6 py-2.5 rounded-lg bg-gray-900 text-white hover:bg-black"
+                                        >
+                                            Close
+                                        </button>
+                                        <button
+                                            onClick={downloadReceipt}
+                                            className="px-6 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700"
+                                        >
+                                            Download Receipt
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    )}
-
+                        )}
+                    </div>
                 </div>
-
                 {/* Pagination Controls & Rows Per Page - Centered at bottom */}
                 {totalPages > 1 || filtered.length > 0 ? (
                     <div className="flex flex-col items-center gap-4 mt-6">

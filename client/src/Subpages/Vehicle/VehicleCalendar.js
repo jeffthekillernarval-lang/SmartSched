@@ -30,6 +30,12 @@ export default function VehicleBookingCalendar() {
 
     const [vehicleTypes, setVehicleTypes] = useState(['All']);
     const [departments, setDepartments] = useState(['All']);
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [showEventModal, setShowEventModal] = useState(false);
+    const handleEventClick = (clickInfo) => {
+        setSelectedEvent(clickInfo.event);
+        setShowEventModal(true);
+    };
 
     const renderEventContent = (eventInfo) => {
         // Use the event's backgroundColor and textColor
@@ -47,6 +53,83 @@ export default function VehicleBookingCalendar() {
                 <b>{eventInfo.timeText && eventInfo.timeText}</b> {eventInfo.event.title}
             </div>
         );
+    };
+    const downloadReceipt = (booking) => {
+        const receiptHtml = `
+  <html>
+    <head>
+      <title>Vehicle Booking Receipt</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 2rem; color: #333; }
+        .header { text-align: center; margin-bottom: 2rem; }
+        .header h1 { color: #96161C; margin: 0; font-size: 28px; }
+        .header h2 { margin: 0; font-size: 18px; font-weight: normal; }
+        .section { border: 1px solid #333; padding: 1rem; margin-bottom: 1rem; border-radius: 6px; }
+        .section h3 { margin: 0 0 0.5rem 0; font-size: 18px; color: #96161C; }
+        .field { margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+        .field span { display: inline-block; min-width: 150px; font-weight: bold; }
+        .signature { margin-top: 2rem; display: flex; justify-content: space-between; }
+        .signature div { text-align: center; }
+        .signature-line { margin-top: 3rem; border-top: 1px solid #333; width: 200px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>School Vehicle Booking Receipt</h1>
+        <h2>${new Date(booking.date).toLocaleDateString()}</h2>
+      </div>
+
+      <div class="section">
+        <h3>Booking Details</h3>
+        <div class="field"><span>Vehicle Type:</span> ${booking.vehicleType}</div>
+        <div class="field"><span>Requestor:</span> ${booking.requestor}</div>
+        <div class="field"><span>Department:</span> ${booking.department}</div>
+        <div class="field"><span>Purpose:</span> ${booking.purpose}</div>
+        <div class="field"><span>Date:</span> ${new Date(booking.date).toLocaleDateString()}</div>
+        <div class="field"><span>Destination:</span> ${booking.destination || '________________'}</div>
+        <div class="field"><span>Departure Time:</span> ${booking.departureTime || '____:__'}</div>
+        <div class="field"><span>Arrival Time:</span> ${booking.arrivalTime || '____:__'}</div>
+        <div class="field"><span>No. of Passengers:</span> ${booking.passengers || '___'}</div>
+      </div>
+
+      <div class="signature">
+        <div>
+          <p>School President</p>
+          <div class="signature-line"></div>
+        </div>
+        <div>
+          <p>Driver</p>
+          <div class="signature-line"></div>
+        </div>
+      </div>
+    </body>
+  </html>
+  `;
+
+        const blob = new Blob([receiptHtml], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `VehicleBooking_Receipt_${booking.id || Date.now()}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const downloadReceiptFromEvent = (event) => {
+        const booking = {
+            vehicleType: event.extendedProps.vehicleType,
+            requestor: event.extendedProps.requestor,
+            department: event.extendedProps.department,
+            purpose: event.extendedProps.purpose,
+            date: event.start,
+            destination: event.extendedProps.destination,
+            departureTime: event.extendedProps.departureTime,
+            arrivalTime: event.extendedProps.arrivalTime,
+            passengers: event.extendedProps.passengers,
+            id: event.id || Date.now()
+        };
+        downloadReceipt(booking); // use your existing receipt function
     };
 
     useEffect(() => {
@@ -209,7 +292,6 @@ export default function VehicleBookingCalendar() {
                 </div> */}
 
                 <FullCalendar
-                    eventColor="#96161C"
                     plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                     headerToolbar={{
                         start: 'prev,next today',
@@ -221,7 +303,60 @@ export default function VehicleBookingCalendar() {
                     selectable={false}
                     events={events}
                     eventContent={renderEventContent}
+                    eventClick={handleEventClick}  // <-- Add this
                 />
+                {showEventModal && selectedEvent && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl shadow-2xl w-11/12 max-w-xl p-6 relative">
+                            <button
+                                onClick={() => setShowEventModal(false)}
+                                className="absolute top-4 right-4 text-gray-500 hover:text-gray-900"
+                            >
+                                ✕
+                            </button>
+
+                            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                                {selectedEvent.title}
+                            </h2>
+
+                            <div className="space-y-2 text-gray-700">
+                                <p><strong>Vehicle Type:</strong> {selectedEvent.extendedProps.vehicleType}</p>
+                                <p><strong>Requestor:</strong> {selectedEvent.extendedProps.requestor}</p>
+                                <p><strong>Department:</strong> {selectedEvent.extendedProps.department}</p>
+                                <p><strong>Purpose:</strong> {selectedEvent.extendedProps.purpose}</p>
+                                <p><strong>Date:</strong> {new Date(selectedEvent.start).toLocaleDateString()}</p>
+                                {selectedEvent.extendedProps.destination && (
+                                    <p><strong>Destination:</strong> {selectedEvent.extendedProps.destination}</p>
+                                )}
+                                {selectedEvent.extendedProps.departureTime && (
+                                    <p><strong>Departure Time:</strong> {selectedEvent.extendedProps.departureTime}</p>
+                                )}
+                                {selectedEvent.extendedProps.arrivalTime && (
+                                    <p><strong>Arrival Time:</strong> {selectedEvent.extendedProps.arrivalTime}</p>
+                                )}
+                                {selectedEvent.extendedProps.passengers && (
+                                    <p><strong>No. of Passengers:</strong> {selectedEvent.extendedProps.passengers}</p>
+                                )}
+                            </div>
+
+                            <div className="mt-6 flex justify-end gap-3">
+                                <button
+                                    onClick={() => downloadReceiptFromEvent(selectedEvent)}
+                                    className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-semibold hover:bg-blue-200"
+                                >
+                                    Download Receipt
+                                </button>
+                                <button
+                                    onClick={() => setShowEventModal(false)}
+                                    className="bg-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
             </div>
         </div>
     );

@@ -12,7 +12,7 @@ export default function VehicleBooking() {
         const storedRole = localStorage.getItem('currentUserRole');
         setIsAdmin(storedRole === 'admin');
     }, []);
-
+    const [expandedRow, setExpandedRow] = useState(null);
     const [form, setForm] = useState({
         vehicleType: '',
         requestor: '',
@@ -21,6 +21,68 @@ export default function VehicleBooking() {
         purpose: ''
     });
     const [editingId, setEditingId] = useState(null);
+    const downloadReceipt = (booking) => {
+        const receiptHtml = `
+  <html>
+    <head>
+      <title>Vehicle Booking Receipt</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 2rem; color: #333; }
+        .header { text-align: center; margin-bottom: 2rem; }
+        .header h1 { color: #96161C; margin: 0; font-size: 28px; }
+        .header h2 { margin: 0; font-size: 20px; font-weight: normal; }
+        .section { border: 1px solid #333; padding: 1rem; margin-bottom: 1rem; border-radius: 6px; }
+        .section h3 { margin: 0 0 0.5rem 0; font-size: 18px; color: #96161C; }
+        .field { margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
+        .field span { display: inline-block; min-width: 150px; font-weight: bold; }
+        .signature { margin-top: 2rem; display: flex; justify-content: space-between; }
+        .signature div { text-align: center; }
+        .signature-line { margin-top: 3rem; border-top: 1px solid #333; width: 200px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <h1>School Vehicle Booking Receipt</h1>
+        <h2>${new Date().toLocaleDateString()}</h2>
+      </div>
+
+      <div class="section">
+        <h3>Booking Details</h3>
+        <div class="field"><span>Vehicle Type:</span> ${toTitleCase(booking.vehicleType || booking.vehicle_Type)}</div>
+        <div class="field"><span>Requestor:</span> ${toTitleCase(booking.requestor)}</div>
+        <div class="field"><span>Department:</span> ${toTitleCase(booking.department)}</div>
+        <div class="field"><span>Date:</span> ${new Date(booking.event_date || booking.date).toLocaleDateString()}</div>
+        <div class="field"><span>Purpose:</span> ${booking.purpose}</div>
+        <div class="field"><span>Destination:</span> ${booking.destination || '________________'}</div>
+        <div class="field"><span>Departure Time:</span> ${booking.departureTime || '____:__'}</div>
+        <div class="field"><span>Arrival Time:</span> ${booking.arrivalTime || '____:__'}</div>
+        <div class="field"><span>No. of Passengers:</span> ${booking.passengers || '___'}</div>
+      </div>
+
+      <div class="signature">
+        <div>
+          <p>School President</p>
+          <div class="signature-line"></div>
+        </div>
+        <div>
+          <p>Driver</p>
+          <div class="signature-line"></div>
+        </div>
+      </div>
+    </body>
+  </html>
+  `;
+
+        const blob = new Blob([receiptHtml], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `VehicleBooking_Receipt_${booking.id || booking.date}.html`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
 
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
@@ -433,64 +495,88 @@ export default function VehicleBooking() {
                                 (filter.dateFrom === '' || b.date >= filter.dateFrom) &&
                                 (filter.dateTo === '' || b.date <= filter.dateTo)
                             ).map((b, index) => (
-                                <tr key={index} className="hover:bg-gray-50 transition">
-                                    <td className="px-6 py-4">{toTitleCase(b.vehicleType || b.vehicle_Type)}</td>
-                                    <td className="px-6 py-4">{toTitleCase(b.requestor)}</td>
-                                    <td className="px-6 py-4">{toTitleCase(b.department)}</td>
-                                    <td className="px-6 py-4">{new Date(b.event_date || b.date).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: '2-digit',
-                                    })}</td>
-                                    <td className="px-6 py-4">{b.purpose}</td>
-                                    {isAdmin ? (
-                                        // ADMIN → show buttons
-                                        <td className="px-1 py-2 flex gap-2">
-                                            <button
-                                                onClick={() => handleEdit(index)}
-                                                className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
-                                            >
-                                                Edit
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(index)}
-                                                className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
-                                            >
-                                                Delete
-                                            </button>
-                                        </td>
-                                    ) : (
-                                        // NOT ADMIN
-                                        parseInt(b.booker_id) === parseInt(currentUserId)
-                                            ? (
-                                                // OWN BOOKING
-                                                <td className="px-1 py-2 flex gap-2">
-                                                    <button
-                                                        onClick={() => handleEdit(index)}
-                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(index)}
-                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </td>
-                                            ) : (
-                                                // OTHER USER
-                                                <td className="px-6 py-4 font-semibold text-[#daa7aa]">
-                                                    Hidden
-                                                </td>
-                                            )
+                                <React.Fragment key={index}>
+                                    <tr
+                                        className="hover:bg-gray-50 transition cursor-pointer"
+                                        onClick={() => setExpandedRow(expandedRow === index ? null : index)}
+                                    >
+                                        <td className="px-6 py-4">{toTitleCase(b.vehicleType || b.vehicle_Type)}</td>
+                                        <td className="px-6 py-4">{toTitleCase(b.requestor)}</td>
+                                        <td className="px-6 py-4">{toTitleCase(b.department)}</td>
+                                        <td className="px-6 py-4">{new Date(b.event_date || b.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: '2-digit' })}</td>
+                                        <td className="px-6 py-4">{b.purpose}</td>
+                                        {isAdmin ? (
+                                            <td className="px-1 py-2 flex gap-2">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
+                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
+                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </td>
+                                        ) : (
+                                            parseInt(b.booker_id) === parseInt(currentUserId)
+                                                ? (
+                                                    <td className="px-1 py-2 flex gap-2">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
+                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
+                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </td>
+                                                ) : (
+                                                    <td className="px-6 py-4 font-semibold text-[#daa7aa]">Hidden</td>
+                                                )
+                                        )}
+                                    </tr>
+
+                                    {/* Expanded Detail Row */}
+                                    {expandedRow === index && (
+                                        <tr className="bg-gray-50">
+                                            <td colSpan={6} className="px-6 py-4">
+                                                <div className="p-4 rounded-lg border border-gray-200 bg-white flex flex-col md:flex-row md:justify-between gap-4 items-start">
+
+                                                    {/* Booking Details */}
+                                                    <div className="space-y-2">
+                                                        <p><strong>Vehicle Type:</strong> {toTitleCase(b.vehicleType || b.vehicle_Type)}</p>
+                                                        <p><strong>Requestor:</strong> {toTitleCase(b.requestor)}</p>
+                                                        <p><strong>Department:</strong> {toTitleCase(b.department)}</p>
+                                                        <p><strong>Date:</strong> {new Date(b.event_date || b.date).toLocaleDateString()}</p>
+                                                        <p><strong>Purpose:</strong> {b.purpose}</p>
+                                                    </div>
+
+                                                    {/* Download Receipt */}
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={() => downloadReceipt(b)}
+                                                            className="px-4 py-2 text-sm font-medium rounded-md bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                                        >
+                                                            Download Receipt
+                                                        </button>
+                                                    </div>
+
+                                                </div>
+                                            </td>
+                                        </tr>
                                     )}
-
-
-                                </tr>
+                                </React.Fragment>
                             ))
                         )}
                     </tbody>
+
                 </table>
             </div>
         </div>
