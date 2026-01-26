@@ -7,6 +7,56 @@ export default function VehicleBooking() {
     const [vehicleTypes, setVehicleTypes] = useState([]);
     const [departments, setDepartments] = useState([]);
     const [isAdmin, setIsAdmin] = useState(false);
+    const [availableVehicles, setAvailableVehicles] = useState([]);
+    const [affiliations, setAffiliations] = useState([]);
+    useEffect(() => {
+        const fetchAffiliations = async () => {
+            try {
+                const res = await fetch('http://localhost:5000/api/fetch-affiliation');
+                const data = await res.json();
+                if (data.success) {
+                    setAffiliations(data.affiliations); // array of {id, abbreviation, meaning, moderator}
+                }
+            } catch (err) {
+                console.error('Error fetching affiliations:', err);
+            }
+        };
+
+        fetchAffiliations();
+    }, []);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                // Fetch bookings
+                const resBookings = await fetch('http://localhost:5000/api/fetch-vehicle');
+                const dataBookings = await resBookings.json();
+                const nonDeleted = dataBookings.vehicles.filter(b => !b.deleted);
+                setBookings(nonDeleted);
+
+                // Extract unique vehicle types for filters
+                const uniqueTypes = Array.from(new Set(nonDeleted.map(b => b.vehicleType || b.vehicle_Type).filter(Boolean)))
+                    .map(toTitleCase)
+                    .sort((a, b) => a.localeCompare(b));
+                setVehicleTypes(uniqueTypes);
+
+                const uniqueDepts = Array.from(new Set(nonDeleted.map(b => b.department).filter(Boolean)))
+                    .map(toTitleCase)
+                    .sort((a, b) => a.localeCompare(b));
+                setDepartments(uniqueDepts);
+
+                // Fetch all vehicles (for select options)
+                const resVehicles = await fetch('http://localhost:5000/api/fetch-vehicle'); // same endpoint, could be separate if needed
+                const dataVehicles = await resVehicles.json();
+                setAvailableVehicles(dataVehicles.vehicles); // assuming your API returns { success: true, vehicles: [...] }
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        };
+
+        fetchData();
+    }, []);
+
     const currentUserId = localStorage.getItem('currentUserId');
     useEffect(() => {
         const storedRole = localStorage.getItem('currentUserRole');
@@ -95,7 +145,7 @@ export default function VehicleBooking() {
         const newBooking = {
             vehicle_Type: form.vehicleType,
             requestor: form.requestor,
-            department: form.department,
+            department: form.affiliation,
             date: form.date,
             purpose: form.purpose,
             booker_id: Number(currentUserId),
@@ -269,16 +319,13 @@ export default function VehicleBooking() {
                                     required
                                 >
                                     <option value="">Select...</option>
-                                    <option value="isuzu">Isuzu</option>
-                                    <option value="hi-ace">Hi-Ace</option>
-                                    <option value="kia">Kia</option>
-                                    <option value="small-bus">Small Bus</option>
-                                    <option value="big-bus">Big Bus</option>
-                                    <option value="tamaraw">Tamaraw</option>
-                                    <option value="hilux">Hilux</option>
-                                    <option value="innova-manual">Innova Manual</option>
-                                    <option value="innova-automatic">Innova Automatic</option>
+                                    {availableVehicles.map(v => (
+                                        <option key={v.id} value={v.vehicle_name}>
+                                            {toTitleCase(v.vehicle_name)}
+                                        </option>
+                                    ))}
                                 </select>
+
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Requestor*</label>
@@ -293,20 +340,23 @@ export default function VehicleBooking() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium mb-1">Department*</label>
-                                <input
-                                    type="text"
-                                    name="department"
-                                    placeholder='AGSO'
-                                    value={form.department}
+                                <label className="block text-sm font-medium mb-1">Affiliation*</label>
+                                <select
+                                    name="affiliation"
+                                    value={form.affiliation}
                                     onChange={handleChange}
                                     className="w-full border rounded-lg px-4 py-2"
                                     required
-
-                                />
-
-
+                                >
+                                    <option value="">Select...</option>
+                                    {affiliations.map(a => (
+                                        <option key={a.id} value={a.abbreviation}>
+                                            {a.abbreviation} - {a.meaning}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
+
                             <div>
                                 <label className="block text-sm font-medium mb-1">Date*</label>
                                 <input
