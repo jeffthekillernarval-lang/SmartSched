@@ -89,7 +89,7 @@ export default function Booking() {
         }
     }, [showVehicle]);
     const [schedules, setSchedules] = useState([
-        { date: '' || null, startTime: '' || null, endTime: '' || null }
+        { date: '', startTime: '', endTime: '' } // Initialize with empty strings
     ]);
 
     const downloadReceipt = () => {
@@ -1187,6 +1187,7 @@ export default function Booking() {
                                     <input
                                         type="text"
                                         name="requestedBy"
+                                        maxLength={19}
                                         value={form.requestedBy}
                                         onChange={handleChange}
                                         placeholder="Juan De la Cruz"

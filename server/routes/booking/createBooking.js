@@ -34,6 +34,8 @@ router.post('/', async (req, res) => {
         const insertedIds = [];
 
         for (const s of schedules) {
+            console.log('Debug: Schedule date:', s.date); // Debug log to check the date value
+
             const result = await client.query(
                 `
                 INSERT INTO "Booking" (
@@ -61,7 +63,7 @@ router.post('/', async (req, res) => {
                 RETURNING id
                 `,
                 [
-                    s.date,
+                    s.date, // Ensure this is in the correct format (YYYY-MM-DD)
                     s.startTime,
                     s.endTime,
                     event_name,

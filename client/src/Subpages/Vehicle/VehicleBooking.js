@@ -335,6 +335,7 @@ export default function VehicleBooking() {
                                     placeholder='Juan Dela Cruz'
                                     value={form.requestor}
                                     onChange={handleChange}
+                                    maxLength={19}
                                     className="w-full border rounded-lg px-4 py-2"
                                     required
                                 />
