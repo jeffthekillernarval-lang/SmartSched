@@ -89,7 +89,7 @@ export default function Booking() {
         }
     }, [showVehicle]);
     const [schedules, setSchedules] = useState([
-        { date: '', startTime: '', endTime: '' } // Initialize with empty strings
+        { date: '' || null, startTime: '' || null, endTime: '' || null }
     ]);
 
     const downloadReceipt = () => {
@@ -644,11 +644,27 @@ export default function Booking() {
             setEquipmentRows([]);
             setEditingId(null);
             setShowForm(false);
+            setSchedules([{ date: '', startTime: '', endTime: '' }]); // Reset schedules
 
         } catch (err) {
             console.error(err);
             alert('Server error');
         }
+    };
+
+    const handleScheduleChange = (index, field, value) => {
+        const updatedSchedules = [...schedules];
+        updatedSchedules[index][field] = value;
+        setSchedules(updatedSchedules);
+    };
+
+    const handleAddSchedule = () => {
+        setSchedules([...schedules, { date: '', startTime: '', endTime: '' }]);
+    };
+
+    const handleRemoveSchedule = (index) => {
+        const updatedSchedules = schedules.filter((_, i) => i !== index);
+        setSchedules(updatedSchedules);
     };
 
     // const handleSubmit = async (e) => {
@@ -657,72 +673,63 @@ export default function Booking() {
 
     //     let isConflict = false;
 
-    //     // Only check for conflicts if NOT editing
+    //     /* ===============================
+    //        CONFLICT CHECK (CREATE ONLY)
+    //     =============================== */
     //     if (!editingId) {
     //         try {
-    //             // Fetch bookings for this venue
     //             const res = await fetch(
     //                 `http://localhost:5000/api/fetch-booking-conflicts?venue=${encodeURIComponent(form.facility)}`
     //             );
     //             const data = await res.json();
 
     //             if (data.success) {
-    //                 console.log('Bookings for this venue:', data.bookings);
-
-    //                 // Take form date and increment by 1 (same way as your display code)
-    //                 const [year, month, day] = (form.date || '').split('-');
-    //                 const dateObj = new Date(`${year}-${month}-${day}`);
-    //                 dateObj.setDate(dateObj.getDate() - 1);
-    //                 const newDate = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
-
+    //                 const newDate = form.date; // ✅ DO NOT SHIFT DATE
     //                 const newStart = form.startTime;
     //                 const newEnd = form.endTime;
 
-    //                 function isTimeOverlap(startA, endA, startB, endB) {
-    //                     return startA < endB && endA > startB;
-    //                 }
+    //                 const isTimeOverlap = (aStart, aEnd, bStart, bEnd) =>
+    //                     aStart < bEnd && aEnd > bStart;
 
     //                 for (const b of data.bookings) {
     //                     const bDate = (b.event_date || b.date || '').split('T')[0];
-    //                     const bStart = b.starting_time || b.startTime || '';
-    //                     const bEnd = b.ending_time || b.endTime || '';
+    //                     const bStart = b.starting_time || '';
+    //                     const bEnd = b.ending_time || '';
 
     //                     if (bDate === newDate && isTimeOverlap(newStart, newEnd, bStart, bEnd)) {
-    //                         isConflict = true;
-    //                         console.log("Conflict found with booking:", b);
     //                         setConflictBooking(b);
     //                         isConflict = true;
     //                         break;
     //                     }
     //                 }
-    //             } else {
-    //                 console.log('Failed to fetch bookings for this venue:', data.message);
     //             }
     //         } catch (err) {
-    //             console.log('Error fetching bookings for this venue:', err);
+    //             console.error('Conflict check error:', err);
     //         }
 
     //         if (isConflict) {
-    //             console.log('Booking creation halted due to a conflict.');
     //             alert('Cannot create booking due to a conflict.');
     //             return;
     //         }
     //     }
 
+    //     /* ===============================
+    //        EQUIPMENT VALIDATION
+    //     =============================== */
+    //     const cleanEquipment = equipmentRows.filter(
+    //         eq => eq.type && eq.quantity
+    //     );
 
-    //     // Check if equipmentRows is empty or all equipment types are empty
-    //     const hasEquipment = equipmentRows.some(eq => eq.type && eq.quantity);
-
-    //     if (!hasEquipment) {
+    //     if (cleanEquipment.length === 0) {
     //         const proceed = window.confirm(
-    //             "Are you going to finish booking a venue without an equipment?\n\nPress OK to continue without equipment, or Cancel to go back."
+    //             "Are you going to finish booking a venue without equipment?\n\nOK = Continue\nCancel = Go back"
     //         );
-    //         if (!proceed) {
-    //             // User chose not to proceed
-    //             return;
-    //         }
+    //         if (!proceed) return;
     //     }
 
+    //     /* ===============================
+    //        CREATE / UPDATE BOOKING
+    //     =============================== */
     //     try {
     //         const url = editingId
     //             ? `http://localhost:5000/api/edit-booking/${editingId}`
@@ -734,7 +741,7 @@ export default function Booking() {
     //             method,
     //             headers: { 'Content-Type': 'application/json' },
     //             body: JSON.stringify({
-    //                 schedules, // Send the schedules array
+    //                 schedules,
     //                 event_name: form.title,
     //                 event_facility: form.facility,
     //                 requested_by: form.requestedBy,
@@ -743,53 +750,77 @@ export default function Booking() {
     //                 creator_id: currentUserId,
     //                 reservation: form.bookingType === 'reservation',
     //                 insider: form.insider,
-    //                 booking_fee: form.booking_fee ?? 0,
-    //                 equipment: equipmentRows // Include equipment data in the payload
+    //                 booking_fee: form.booking_fee ?? 0
     //             })
     //         });
 
     //         const data = await response.json();
 
-    //         if (data.success) {
-    //             alert(editingId ? 'Booking updated successfully' : 'Booking created successfully');
-    //             if (equipmentRows.length > 0) {
-    //                 await fetch('http://localhost:5000/api/create-equipments', {
-    //                     method: 'POST',
-    //                     headers: { 'Content-Type': 'application/json' },
-    //                     body: JSON.stringify({
-    //                         booking_id: data.booking.id, // 👈 THIS IS CRITICAL
-    //                         equipment: equipmentRows
-    //                     })
-    //                 });
-    //             }
-    //             fetch('http://localhost:5000/api/fetch-bookings')
-    //                 .then(res => res.json())
-    //                 .then(data => {
-    //                     if (data.success) {
-    //                         setBookings(data.bookings);
-    //                     }
-    //                 });
-    //             setForm({
-    //                 title: '',
-    //                 facility: '',
-    //                 date: '',
-    //                 startTime: '',
-    //                 endTime: '',
-    //                 requestedBy: '',
-    //                 org: '',
-    //                 contact: '',
-    //                 bookingType: 'booking',
-    //                 insider: 'student',
-    //                 booking_fee: 0,
-    //             });
-    //             setEquipmentRows([]); // Clear equipment rows after successful booking
-    //             setEditingId(null);
-    //             setShowForm(false);
-    //             return;
-    //         } else {
+    //         if (!data.success) {
     //             alert(data.message || 'Booking failed');
+    //             return;
     //         }
+
+    //         /* ===============================
+    //            SAFETY CHECK
+    //         =============================== */
+    //         if (!data.booking?.id) {
+    //             console.error('Missing booking ID:', data);
+    //             alert('Booking saved, but equipment could not be attached.');
+    //             return;
+    //         }
+
+    //         /* ===============================
+    //            CREATE EQUIPMENT (CREATE ONLY)
+    //         =============================== */
+    //         if (!editingId && cleanEquipment.length > 0) {
+    //             const eqRes = await fetch('http://localhost:5000/api/create-equipment', {
+    //                 method: 'POST',
+    //                 headers: { 'Content-Type': 'application/json' },
+    //                 body: JSON.stringify({
+    //                     booking_id: data.booking.id,
+    //                     equipment: cleanEquipment
+    //                 })
+    //             });
+
+    //             const eqData = await eqRes.json();
+    //             if (!eqData.success) {
+    //                 alert('Booking saved, but equipment failed to save.');
+    //             }
+    //         }
+
+    //         /* ===============================
+    //            REFRESH & RESET
+    //         =============================== */
+    //         alert(editingId ? 'Booking updated successfully' : 'Booking created successfully');
+
+    //         const refreshed = await fetch('http://localhost:5000/api/fetch-bookings');
+    //         const refreshedData = await refreshed.json();
+    //         if (refreshedData.success) {
+    //             setBookings(refreshedData.bookings);
+    //         }
+
+    //         setForm({
+    //             title: '',
+    //             facility: '',
+    //             date: '',
+    //             startTime: '',
+    //             endTime: '',
+    //             requestedBy: '',
+    //             org: '',
+    //             contact: '',
+    //             bookingType: 'booking',
+    //             insider: 'student',
+    //             booking_fee: 0,
+    //         });
+
+    //         setEquipmentRows([]);
+    //         setEditingId(null);
+    //         setShowForm(false);
+    //         setSchedules([{ date: '', startTime: '', endTime: '' }]); // Reset schedules
+
     //     } catch (err) {
+    //         console.error(err);
     //         alert('Server error');
     //     }
     // };
@@ -1187,7 +1218,6 @@ export default function Booking() {
                                     <input
                                         type="text"
                                         name="requestedBy"
-                                        maxLength={19}
                                         value={form.requestedBy}
                                         onChange={handleChange}
                                         placeholder="Juan De la Cruz"

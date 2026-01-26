@@ -34,6 +34,10 @@ router.post('/', async (req, res) => {
         const insertedIds = [];
 
         for (const s of schedules) {
+            if (!s.date || s.date.trim() === '') {
+                throw new Error('Invalid or missing date in schedule.');
+            }
+
             console.log('Debug: Schedule date:', s.date); // Debug log to check the date value
 
             const result = await client.query(
