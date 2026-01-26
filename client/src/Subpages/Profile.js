@@ -155,7 +155,7 @@ export default function Profile() {
                                         <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Date</th>
                                         <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Time</th>
                                         <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider">Status</th>
-                                        <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider rounded-tr-xl">Actions</th>
+                                        {/* <th className="px-4 py-2 text-left text-xs font-bold text-white uppercase tracking-wider rounded-tr-xl">Actions</th> */}
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-100">
@@ -183,7 +183,7 @@ export default function Profile() {
                                                     {b.status}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-4 whitespace-nowrap flex gap-2">
+                                            {/* <td className="px-4 py-4 whitespace-nowrap flex gap-2">
                                                 <button
                                                     onClick={() => handleEdit(b)}
                                                     className="text-[#96161C] hover:text-[#7a1217] transition"
@@ -202,7 +202,7 @@ export default function Profile() {
                                                         <path d="M9 3v1H4v2h16V4h-5V3H9zm1 5v12h2V8h-2zm4 0v12h2V8h-2z" />
                                                     </svg>
                                                 </button>
-                                            </td>
+                                            </td> */}
                                         </tr>
                                     ))}
                                 </tbody>

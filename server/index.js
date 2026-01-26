@@ -149,7 +149,6 @@ const createEquipmentsRoute = require('./routes/cruds/createEquipments');
 app.use('/api/create-equipments', createEquipmentsRoute);
 const fetchEquipmentsRoute = require('./routes/cruds/fetchEquipments');
 app.use('/api/fetch-equipments', fetchEquipmentsRoute);
-
 // FACILITIES
 const createFacilitiesRoute = require('./routes/cruds/createFacilities');
 app.use('/api/create-facilities', createFacilitiesRoute);
