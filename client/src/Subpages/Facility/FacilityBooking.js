@@ -63,7 +63,31 @@ export default function Booking() {
     const [showBookingSummary, setShowBookingSummary] = useState(false);
     const [loadingAffiliations, setLoadingAffiliations] = useState(true);
     const [showFacilityBreakdown, setShowFacilityBreakdown] = useState(false);
+    // const [showVehicle, setShowVehicle] = useState(false);
+    // const [vehicleType, setVehicleType] = useState('');
+    const [vehicleList, setVehicleList] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
+    useEffect(() => {
+        if (showVehicle) {
+            setLoading(true);
+            fetch('http://localhost:5000/api/fetch-vehicle')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        setVehicleList(data.vehicles); // Assume array of { id, name, type, passenger_capacity }
+                    } else {
+                        setError('Failed to fetch vehicles');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    setError('Error fetching vehicles');
+                })
+                .finally(() => setLoading(false));
+        }
+    }, [showVehicle]);
     const [schedules, setSchedules] = useState([
         { date: '' || null, startTime: '' || null, endTime: '' || null }
     ]);
@@ -470,79 +494,69 @@ export default function Booking() {
             console.error('Toggle reservation error:', err);
         }
     };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
         console.log('Venue from form:', form.facility);
 
         let isConflict = false;
 
-        // Only check for conflicts if NOT editing
+        /* ===============================
+           CONFLICT CHECK (CREATE ONLY)
+        =============================== */
         if (!editingId) {
             try {
-                // Fetch bookings for this venue
                 const res = await fetch(
                     `http://localhost:5000/api/fetch-booking-conflicts?venue=${encodeURIComponent(form.facility)}`
                 );
                 const data = await res.json();
 
                 if (data.success) {
-                    console.log('Bookings for this venue:', data.bookings);
-
-                    // Take form date and increment by 1 (same way as your display code)
-                    const [year, month, day] = (form.date || '').split('-');
-                    const dateObj = new Date(`${year}-${month}-${day}`);
-                    dateObj.setDate(dateObj.getDate() - 1);
-                    const newDate = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
-
+                    const newDate = form.date; // ✅ DO NOT SHIFT DATE
                     const newStart = form.startTime;
                     const newEnd = form.endTime;
 
-                    function isTimeOverlap(startA, endA, startB, endB) {
-                        return startA < endB && endA > startB;
-                    }
+                    const isTimeOverlap = (aStart, aEnd, bStart, bEnd) =>
+                        aStart < bEnd && aEnd > bStart;
 
                     for (const b of data.bookings) {
                         const bDate = (b.event_date || b.date || '').split('T')[0];
-                        const bStart = b.starting_time || b.startTime || '';
-                        const bEnd = b.ending_time || b.endTime || '';
+                        const bStart = b.starting_time || '';
+                        const bEnd = b.ending_time || '';
 
                         if (bDate === newDate && isTimeOverlap(newStart, newEnd, bStart, bEnd)) {
-                            isConflict = true;
-                            console.log("Conflict found with booking:", b);
                             setConflictBooking(b);
                             isConflict = true;
                             break;
                         }
                     }
-                } else {
-                    console.log('Failed to fetch bookings for this venue:', data.message);
                 }
             } catch (err) {
-                console.log('Error fetching bookings for this venue:', err);
+                console.error('Conflict check error:', err);
             }
 
             if (isConflict) {
-                console.log('Booking creation halted due to a conflict.');
                 alert('Cannot create booking due to a conflict.');
                 return;
             }
         }
 
+        /* ===============================
+           EQUIPMENT VALIDATION
+        =============================== */
+        const cleanEquipment = equipmentRows.filter(
+            eq => eq.type && eq.quantity
+        );
 
-        // Check if equipmentRows is empty or all equipment types are empty
-        const hasEquipment = equipmentRows.some(eq => eq.type && eq.quantity);
-
-        if (!hasEquipment) {
+        if (cleanEquipment.length === 0) {
             const proceed = window.confirm(
-                "Are you going to finish booking a venue without an equipment?\n\nPress OK to continue without equipment, or Cancel to go back."
+                "Are you going to finish booking a venue without equipment?\n\nOK = Continue\nCancel = Go back"
             );
-            if (!proceed) {
-                // User chose not to proceed
-                return;
-            }
+            if (!proceed) return;
         }
 
+        /* ===============================
+           CREATE / UPDATE BOOKING
+        =============================== */
         try {
             const url = editingId
                 ? `http://localhost:5000/api/edit-booking/${editingId}`
@@ -554,7 +568,7 @@ export default function Booking() {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    schedules, // Send the schedules array
+                    schedules,
                     event_name: form.title,
                     event_facility: form.facility,
                     requested_by: form.requestedBy,
@@ -569,39 +583,216 @@ export default function Booking() {
 
             const data = await response.json();
 
-            if (data.success) {
-                alert(editingId ? 'Booking updated successfully' : 'Booking created successfully');
-                fetch('http://localhost:5000/api/fetch-bookings')
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            setBookings(data.bookings);
-                        }
-                    });
-                setForm({
-                    title: '',
-                    facility: '',
-                    date: '',
-                    startTime: '',
-                    endTime: '',
-                    requestedBy: '',
-                    org: '',
-                    contact: '',
-                    bookingType: 'booking',
-                    insider: 'student',
-                    booking_fee: 0,
-                });
-                setEquipmentRows([]);
-                setEditingId(null);
-                setShowForm(false);
-                return;
-            } else {
+            if (!data.success) {
                 alert(data.message || 'Booking failed');
+                return;
             }
+
+            /* ===============================
+               SAFETY CHECK
+            =============================== */
+            if (!data.booking?.id) {
+                console.error('Missing booking ID:', data);
+                alert('Booking saved, but equipment could not be attached.');
+                return;
+            }
+
+            /* ===============================
+               CREATE EQUIPMENT (CREATE ONLY)
+            =============================== */
+            if (!editingId && cleanEquipment.length > 0) {
+                const eqRes = await fetch('http://localhost:5000/api/create-equipment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        booking_id: data.booking.id,
+                        equipment: cleanEquipment
+                    })
+                });
+
+                const eqData = await eqRes.json();
+                if (!eqData.success) {
+                    alert('Booking saved, but equipment failed to save.');
+                }
+            }
+
+            /* ===============================
+               REFRESH & RESET
+            =============================== */
+            alert(editingId ? 'Booking updated successfully' : 'Booking created successfully');
+
+            const refreshed = await fetch('http://localhost:5000/api/fetch-bookings');
+            const refreshedData = await refreshed.json();
+            if (refreshedData.success) {
+                setBookings(refreshedData.bookings);
+            }
+
+            setForm({
+                title: '',
+                facility: '',
+                date: '',
+                startTime: '',
+                endTime: '',
+                requestedBy: '',
+                org: '',
+                contact: '',
+                bookingType: 'booking',
+                insider: 'student',
+                booking_fee: 0,
+            });
+
+            setEquipmentRows([]);
+            setEditingId(null);
+            setShowForm(false);
+
         } catch (err) {
+            console.error(err);
             alert('Server error');
         }
     };
+
+    // const handleSubmit = async (e) => {
+    //     e.preventDefault();
+    //     console.log('Venue from form:', form.facility);
+
+    //     let isConflict = false;
+
+    //     // Only check for conflicts if NOT editing
+    //     if (!editingId) {
+    //         try {
+    //             // Fetch bookings for this venue
+    //             const res = await fetch(
+    //                 `http://localhost:5000/api/fetch-booking-conflicts?venue=${encodeURIComponent(form.facility)}`
+    //             );
+    //             const data = await res.json();
+
+    //             if (data.success) {
+    //                 console.log('Bookings for this venue:', data.bookings);
+
+    //                 // Take form date and increment by 1 (same way as your display code)
+    //                 const [year, month, day] = (form.date || '').split('-');
+    //                 const dateObj = new Date(`${year}-${month}-${day}`);
+    //                 dateObj.setDate(dateObj.getDate() - 1);
+    //                 const newDate = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+
+    //                 const newStart = form.startTime;
+    //                 const newEnd = form.endTime;
+
+    //                 function isTimeOverlap(startA, endA, startB, endB) {
+    //                     return startA < endB && endA > startB;
+    //                 }
+
+    //                 for (const b of data.bookings) {
+    //                     const bDate = (b.event_date || b.date || '').split('T')[0];
+    //                     const bStart = b.starting_time || b.startTime || '';
+    //                     const bEnd = b.ending_time || b.endTime || '';
+
+    //                     if (bDate === newDate && isTimeOverlap(newStart, newEnd, bStart, bEnd)) {
+    //                         isConflict = true;
+    //                         console.log("Conflict found with booking:", b);
+    //                         setConflictBooking(b);
+    //                         isConflict = true;
+    //                         break;
+    //                     }
+    //                 }
+    //             } else {
+    //                 console.log('Failed to fetch bookings for this venue:', data.message);
+    //             }
+    //         } catch (err) {
+    //             console.log('Error fetching bookings for this venue:', err);
+    //         }
+
+    //         if (isConflict) {
+    //             console.log('Booking creation halted due to a conflict.');
+    //             alert('Cannot create booking due to a conflict.');
+    //             return;
+    //         }
+    //     }
+
+
+    //     // Check if equipmentRows is empty or all equipment types are empty
+    //     const hasEquipment = equipmentRows.some(eq => eq.type && eq.quantity);
+
+    //     if (!hasEquipment) {
+    //         const proceed = window.confirm(
+    //             "Are you going to finish booking a venue without an equipment?\n\nPress OK to continue without equipment, or Cancel to go back."
+    //         );
+    //         if (!proceed) {
+    //             // User chose not to proceed
+    //             return;
+    //         }
+    //     }
+
+    //     try {
+    //         const url = editingId
+    //             ? `http://localhost:5000/api/edit-booking/${editingId}`
+    //             : 'http://localhost:5000/api/create-booking';
+
+    //         const method = editingId ? 'PUT' : 'POST';
+
+    //         const response = await fetch(url, {
+    //             method,
+    //             headers: { 'Content-Type': 'application/json' },
+    //             body: JSON.stringify({
+    //                 schedules, // Send the schedules array
+    //                 event_name: form.title,
+    //                 event_facility: form.facility,
+    //                 requested_by: form.requestedBy,
+    //                 organization: form.org,
+    //                 contact: form.contact,
+    //                 creator_id: currentUserId,
+    //                 reservation: form.bookingType === 'reservation',
+    //                 insider: form.insider,
+    //                 booking_fee: form.booking_fee ?? 0,
+    //                 equipment: equipmentRows // Include equipment data in the payload
+    //             })
+    //         });
+
+    //         const data = await response.json();
+
+    //         if (data.success) {
+    //             alert(editingId ? 'Booking updated successfully' : 'Booking created successfully');
+    //             if (equipmentRows.length > 0) {
+    //                 await fetch('http://localhost:5000/api/create-equipments', {
+    //                     method: 'POST',
+    //                     headers: { 'Content-Type': 'application/json' },
+    //                     body: JSON.stringify({
+    //                         booking_id: data.booking.id, // 👈 THIS IS CRITICAL
+    //                         equipment: equipmentRows
+    //                     })
+    //                 });
+    //             }
+    //             fetch('http://localhost:5000/api/fetch-bookings')
+    //                 .then(res => res.json())
+    //                 .then(data => {
+    //                     if (data.success) {
+    //                         setBookings(data.bookings);
+    //                     }
+    //                 });
+    //             setForm({
+    //                 title: '',
+    //                 facility: '',
+    //                 date: '',
+    //                 startTime: '',
+    //                 endTime: '',
+    //                 requestedBy: '',
+    //                 org: '',
+    //                 contact: '',
+    //                 bookingType: 'booking',
+    //                 insider: 'student',
+    //                 booking_fee: 0,
+    //             });
+    //             setEquipmentRows([]); // Clear equipment rows after successful booking
+    //             setEditingId(null);
+    //             setShowForm(false);
+    //             return;
+    //         } else {
+    //             alert(data.message || 'Booking failed');
+    //         }
+    //     } catch (err) {
+    //         alert('Server error');
+    //     }
+    // };
 
     const ActionButton = ({ label, variant = "default", disabled }) => {
         const base = "px-4 py-1.5 rounded-md text-sm font-medium transition focus:outline-none";
@@ -873,7 +1064,8 @@ export default function Booking() {
                                         <label className="block text-sm font-medium mb-1">Event date*</label>
                                         <input
                                             type="date"
-                                            value={s.date} // Bind to schedules array
+                                            value={s.date || getTomorrowDate()}
+                                            min={getTomorrowDate()}
                                             onChange={(e) => {
                                                 const copy = [...schedules];
                                                 copy[index].date = e.target.value;
@@ -1121,12 +1313,26 @@ export default function Booking() {
                                         onClick={() => setShowVehicle(true)}
                                         className="bg-[#96161C] text-white px-6 py-2 rounded-lg"
                                     >
-                                        Add Vehicle
+                                        Add Vehicle +
                                     </button>
+
                                     {showVehicle && (
-                                        <div className="mt-4 p-4 border rounded-lg bg-gray-50">
+                                        <div className="mt-4 p-4 border rounded-lg bg-gray-50 relative">
+                                            {/* Close Button */}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowVehicle(false);
+                                                    setVehicleType('');
+                                                }}
+                                                className="absolute top-2 right-2 text-gray-600 hover:text-gray-900 font-bold text-lg"
+                                                title="Close"
+                                            >
+                                                &times;
+                                            </button>
+
                                             <label className="block text-sm font-medium mb-1">
-                                                Vehicle Type*
+                                                Vehicle*
                                             </label>
 
                                             <select
@@ -1135,27 +1341,27 @@ export default function Booking() {
                                                 className="w-full border rounded-lg px-4 py-2 mb-3"
                                                 required
                                             >
-                                                <option value="">Select...</option>
-                                                <option value="isuzu">Isuzu</option>
-                                                <option value="hi-ace">Hi-Ace</option>
-                                                <option value="kia">Kia</option>
-                                                <option value="small-bus">Small Bus</option>
-                                                <option value="big-bus">Big Bus</option>
-                                                <option value="tamaraw">Tamaraw</option>
-                                                <option value="hilux">Hilux</option>
-                                                <option value="innova-manual">Innova Manual</option>
-                                                <option value="innova-automatic">Innova Automatic</option>
+                                                <option value="">Select a vehicle...</option>
+                                                {loading && <option disabled>Loading...</option>}
+                                                {error && <option disabled>{error}</option>}
+                                                {vehicleList.map(v => (
+                                                    <option key={v.id} value={v.id}>
+                                                        {`${v.vehicle_name} | ${v.vehicle_type} | Capacity: ${v.passenger_capacity}`}
+                                                    </option>
+                                                ))}
                                             </select>
 
                                             <button
                                                 type="button"
-                                                onClick={handleCreateVehicleFromBooking}
-                                                className="bg-[#96161C] text-white px-6 py-2 rounded-lg"
+                                                onClick={() => handleCreateVehicleFromBooking(vehicleType)}
+                                                disabled={!vehicleType}
+                                                className="bg-[#96161C] text-white px-6 py-2 rounded-lg disabled:opacity-50"
                                             >
                                                 Save Vehicle Booking
                                             </button>
                                         </div>
                                     )}
+
 
 
 
@@ -1558,7 +1764,7 @@ export default function Booking() {
                                                 <span className="text-gray-400 italic">No equipment</span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap cursor-pointer">
+                                        <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={(e) => e.stopPropagation()}>
                                             {editReservationId === b.id ? (
                                                 <select
                                                     value={b.reservation ? 'Reservation' : 'Booking'}
@@ -1628,7 +1834,7 @@ export default function Booking() {
                                             </>
                                         )}
                                         {UserisNotAdmin ?
-                                            <td> <span
+                                            <td onClick={(e) => e.stopPropagation()}> <span
                                                 className={`px-3 py-1 rounded-full text-xs font-bold shadow
                                                         ${b.status === 'approved'
                                                         ? 'bg-green-100 text-green-700 border border-green-300'
@@ -1644,12 +1850,13 @@ export default function Booking() {
                                                 {b.status || 'Pending'}
                                             </span></td>
                                             :
-                                            <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={() => handleStatusClick(idx)}>
+                                            <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={(e) => { handleStatusClick(idx); e.stopPropagation(); }}>
                                                 {editStatusIndex === idx ? (
                                                     <select
                                                         value={b.status}
                                                         onChange={(e) => handleStatusChange(idx, e.target.value, b.id)}
                                                         onBlur={() => setEditStatusIndex(null)}
+                                                        onClick={(e) => e.stopPropagation()}
                                                         autoFocus
                                                         className="text-xs px-3 py-1 border rounded-full focus:ring-2 focus:ring-[#96161C] font-bold shadow"
                                                         style={{ minWidth: 120 }}
@@ -1689,13 +1896,17 @@ export default function Booking() {
                                             </td>
                                         )}
 
-                                        <td className="px-6 py-4 whitespace-nowrap text-right flex gap-2 justify-center">
+                                        <td className="px-6 py-4 whitespace-nowrap text-right flex gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
                                             <div className='group relative inline-block'>
                                                 {UserisNotAdmin ?
 
                                                     ((parseInt(b.creator_id) === parseInt(currentUserId)) ?
                                                         <button
-                                                            onClick={() => cancelBooking(b.id)} // assuming b.id is the primary key
+                                                            // onClick={(e) => e.stopPropagation()}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                cancelBooking(b.id);
+                                                            }} // assuming b.id is the primary key
                                                             className="text-red-600 hover:text-red-800 transition"
                                                             title="Cancel Booking"
                                                         >
@@ -1709,7 +1920,10 @@ export default function Booking() {
                                                     )
                                                     :
                                                     <button
-                                                        onClick={() => cancelBooking(b.id)} // assuming b.id is the primary key
+                                                        onClick={(e) => {
+                                                            cancelBooking(b.id);
+                                                            e.stopPropagation();
+                                                        }} // assuming b.id is the primary key
                                                         className="text-red-600 hover:text-red-800 transition"
                                                         title="Cancel Booking"
                                                     >
@@ -1902,16 +2116,16 @@ export default function Booking() {
                                     {/* Footer */}
                                     <div className="px-10 py-5 border-t flex justify-end">
                                         <button
+                                            onClick={downloadReceipt}
+                                            className="mr-5 px-6 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700"
+                                        >
+                                            Download Receipt
+                                        </button>
+                                        <button
                                             onClick={() => setShowBookingSummary(false)}
                                             className="px-6 py-2.5 rounded-lg bg-gray-900 text-white hover:bg-black"
                                         >
                                             Close
-                                        </button>
-                                        <button
-                                            onClick={downloadReceipt}
-                                            className="px-6 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700"
-                                        >
-                                            Download Receipt
                                         </button>
                                     </div>
                                 </div>

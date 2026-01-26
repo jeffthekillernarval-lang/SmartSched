@@ -83,7 +83,11 @@ router.post('/', async (req, res) => {
         res.json({
             success: true,
             ids: insertedIds,
-            message: `${insertedIds.length} bookings created`
+            message: `${insertedIds.length} bookings created`,
+            booking: {
+                id: insertedIds[0] // ✅ first booking ID
+            }
+
         });
 
     } catch (err) {
