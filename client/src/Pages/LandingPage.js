@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
-    Menu, X, Home, Calendar, ClipboardList, LogOut, User, ScrollText, Hotel, Speaker, Car, UserCog
+    Menu, X, Home, Calendar, ClipboardList, LogOut, User, ScrollText, Hotel, Speaker, Car, UserCog, LifeBuoy
 } from 'lucide-react';
 
 import Dashboard from '../Subpages/Dashboard';
@@ -21,6 +21,7 @@ import Equipments from '../Subpages/Equipments';
 // DASHBOARD    
 import FacilityDashboard from '../Subpages/FacilityDashboard';
 import VehicleDashboard from '../Subpages/VehicleDashboard';
+import Drivers from '../Subpages/Drivers';
 
 // ✅ Updated helper — now handles both facility & vehicle bookings
 async function sendCohereChatMessage(message, bookingsPayload = {}, currentDateTime) {
@@ -186,6 +187,7 @@ export default function LandingPage() {
         case 'manage-allequipment': RenderedPage = <Equipments />; break;
         case 'facility-dashboard': RenderedPage = < FacilityDashboard />; break;
         case 'vehicle-dashboard': RenderedPage = <VehicleDashboard />; break;
+        case 'manage-drivers': RenderedPage = <Drivers />; break;
         default: RenderedPage = <Dashboard />;
     }
 
@@ -283,6 +285,14 @@ export default function LandingPage() {
                                             label="Vehicles"
                                             open={isSidebarOpen}
                                             onClick={() => handleSetActivePage('manage-vehicles')}
+                                        />
+                                    )}
+                                    {user?.role === 'admin' && (
+                                        <SidebarItem
+                                            icon={<LifeBuoy size={20} />}
+                                            label="Drivers"
+                                            open={isSidebarOpen}
+                                            onClick={() => handleSetActivePage('manage-drivers')}
                                         />
                                     )}
                                 </>

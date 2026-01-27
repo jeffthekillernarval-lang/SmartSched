@@ -9,6 +9,7 @@ export default function VehicleBooking() {
     const [isAdmin, setIsAdmin] = useState(false);
     const [availableVehicles, setAvailableVehicles] = useState([]);
     const [affiliations, setAffiliations] = useState([]);
+    const [availableDrivers, setAvailableDrivers] = useState([]);
     useEffect(() => {
         const fetchAffiliations = async () => {
             try {
@@ -82,12 +83,38 @@ export default function VehicleBooking() {
     }, []);
     const [expandedRow, setExpandedRow] = useState(null);
     const [form, setForm] = useState({
-        vehicleId: '',     // store vehicle ID instead of name
+        vehicleId: '',
+        driverId: '',
         requestor: '',
-        affiliationId: '', // store affiliation/department ID
+        affiliationId: '',
         date: '',
         purpose: ''
     });
+    useEffect(() => {
+        if (!form.vehicleId) {
+            setAvailableDrivers([]);
+            setForm(prev => ({ ...prev, driverId: '' }));
+            return;
+        }
+
+        const fetchDriversForVehicle = async () => {
+            try {
+                const res = await fetch(
+                    `http://localhost:5000/api/drivers-by-vehicle/${form.vehicleId}`
+                );
+                const data = await res.json();
+
+                if (data.success) {
+                    setAvailableDrivers(data.drivers);
+                }
+            } catch (err) {
+                console.error('Fetch drivers failed:', err);
+            }
+        };
+
+        fetchDriversForVehicle();
+    }, [form.vehicleId]);
+
 
     const [editingId, setEditingId] = useState(null);
     const downloadReceipt = (booking) => {
@@ -198,6 +225,7 @@ export default function VehicleBooking() {
 
         const newBooking = {
             vehicle_id: Number(form.vehicleId),
+            driver_id: Number(form.driverId),
             requestor: form.requestor,
             department_id: Number(form.affiliationId),
             date: form.date,
@@ -508,6 +536,29 @@ export default function VehicleBooking() {
                                 className="w-full border rounded-lg px-4 py-2"
                                 required
                             />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">Driver*</label>
+                            <select
+                                name="driverId"
+                                value={form.driverId}
+                                onChange={handleChange}
+                                className="w-full border rounded-lg px-4 py-2"
+                                required
+                                disabled={!availableDrivers.length}
+                            >
+                                <option value="">
+                                    {availableDrivers.length
+                                        ? 'Select driver...'
+                                        : 'No drivers available'}
+                                </option>
+
+                                {availableDrivers.map(d => (
+                                    <option key={d.id} value={d.id}>
+                                        {d.name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div className="flex gap-3 justify-end">
                             <button type="submit" className="bg-[#96161C] text-white px-8 py-2 rounded-lg">

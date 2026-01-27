@@ -181,6 +181,19 @@ app.use('/api/create-raw-vehicle-booking', createRawVehicleBooking);
 const updateStatusRoute = require('./routes/booking/updateStatus');
 app.use('/api/update-status', updateStatusRoute);
 
+const createDriverRoute = require('./routes/cruds/createDriver');
+app.use('/api/create-driver', createDriverRoute);
+const fetchDriversRoute = require('./routes/cruds/fetchDrivers');
+app.use('/api/fetch-drivers', fetchDriversRoute);
+const updateDriverRoute = require('./routes/cruds/updateDriver');
+app.use('/api/update-driver', updateDriverRoute);
+const deleteDriverRoute = require('./routes/cruds/deleteDriver');
+app.use('/api/delete-driver', deleteDriverRoute);
+const fetchDriversByVehicle = require('./routes/booking/fetch-drivers-by-vehicle');
+app.use('/api/drivers-by-vehicle', fetchDriversByVehicle);
+
+
+
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });

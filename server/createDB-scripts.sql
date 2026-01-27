@@ -218,3 +218,22 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Vehicles"
     OWNER to postgres;
+
+
+
+    CREATE TABLE "Drivers" (
+    id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    age INT,
+    gender TEXT,
+    contact_number TEXT,
+    enabled BOOLEAN DEFAULT true
+);
+
+CREATE TABLE "DriverVehicles" (
+    id SERIAL PRIMARY KEY,
+    driver_id INT REFERENCES "Drivers"(id) ON DELETE CASCADE,
+    vehicle_id INT REFERENCES "Vehicles"(id) ON DELETE CASCADE,
+    enabled BOOLEAN DEFAULT true,
+    UNIQUE (driver_id, vehicle_id)
+);
