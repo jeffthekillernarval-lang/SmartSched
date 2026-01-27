@@ -7,21 +7,19 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
 
-// GET /api/vehicle-conflicts?vehicleType=Innova&date=2025-09-30
+// GET /api/vehicle-conflicts?vehicleId=7&date=2025-09-30
 router.get('/', async (req, res) => {
-    const { vehicleType, date } = req.query;
-    if (!vehicleType || !date) {
-        return res.status(400).json({ success: false, message: 'vehicleType and date are required' });
-    }
+    const { vehicleId, date } = req.query;
+    if (!vehicleId || !date) return res.status(400).json({ success: false, message: 'vehicleId and date are required' });
 
     try {
         const result = await pool.query(
             `SELECT * FROM "VehicleBooking"
-             WHERE "vehicle_Type" = $1
+             WHERE "vehicle_id" = $1
                AND date = $2
                AND deleted = false
              ORDER BY date DESC`,
-            [vehicleType, date]
+            [vehicleId, date]
         );
 
         res.json({ success: true, bookings: result.rows });

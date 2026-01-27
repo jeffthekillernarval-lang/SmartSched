@@ -48,7 +48,7 @@ export default function LandingPage() {
     const [showChatbot, setShowChatbot] = useState(false);
     const [chatInput, setChatInput] = useState('');
     const [chatMessages, setChatMessages] = useState([
-        { from: 'bot', text: 'Hi! How can I help you today?' }
+        { from: 'bot', text: 'Hi! How can I help you today?, `\n`Would u like to book a Facility or Vehicle for an event?' }
     ]);
     const [isManagementOpen, setIsManagementOpen] = useState(true);
 

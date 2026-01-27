@@ -85,16 +85,20 @@ router.post('/', async (req, res) => {
         }
 
         await client.query('COMMIT');
-
         res.json({
             success: true,
-            ids: insertedIds,
-            message: `${insertedIds.length} bookings created`,
-            booking: {
-                id: insertedIds[0] // ✅ first booking ID
-            }
-
+            bookings: insertedIds,
+            message: `${insertedIds.length} bookings created`
         });
+        // res.json({
+        //     success: true,
+        //     ids: insertedIds,
+        //     message: `${insertedIds.length} bookings created`,
+        //     booking: {
+        //         bookings: insertedIds
+        //     }
+
+        // });
 
     } catch (err) {
         await client.query('ROLLBACK');

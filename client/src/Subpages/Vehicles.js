@@ -3,13 +3,16 @@ import { Truck, Edit, Trash } from 'lucide-react';
 
 export default function Vehicles() {
     const [vehicles, setVehicles] = useState([]);
+    const [loading, setLoading] = useState(false);
+
     const [form, setForm] = useState({
-        name: '',
-        plateNumber: '',
+        name: '', // Updated from vehicle_name to name
+        plateNumber: '', // Updated from plate_number to plateNumber
         vin: '',
-        type: '',
-        capacity: ''
+        type: 'Van', // Updated from vehicle_type to type
+        capacity: '' // Updated from passenger_capacity to capacity
     });
+
     const [editingId, setEditingId] = useState(null);
 
     const fetchVehicles = async () => {
@@ -35,49 +38,81 @@ export default function Vehicles() {
 
     const resetForm = () => {
         setForm({
-            name: '',
-            plateNumber: '',
+            name: '', // Updated
+            plateNumber: '', // Updated
             vin: '',
-            type: 'Van',
-            capacity: ''
+            type: 'Van', // Updated
+            capacity: '' // Updated
         });
         setEditingId(null);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setLoading(true);
 
-        const res = await fetch('http://localhost:5000/api/create-vehicle', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(form)
-        });
+        try {
+            let url = 'http://localhost:5000/api/create-vehicle';
+            let method = 'POST';
 
-        const data = await res.json();
+            if (editingId) {
+                // If editing, call the update endpoint
+                url = `http://localhost:5000/api/final-update-vehicles/${editingId}`;
+                method = 'PUT';
+            }
 
-        if (data.success) {
-            fetchVehicles(); // refresh from DB
-            resetForm();
-        } else {
-            alert('Failed to create vehicle');
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form)
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                fetchVehicles(); // Refresh list
+                resetForm();     // Clear form
+            } else {
+                alert(data.message || 'Operation failed');
+            }
+        } catch (err) {
+            console.error('Submit failed', err);
+        } finally {
+            setLoading(false);
         }
     };
 
 
     const handleEdit = (v) => {
         setForm({
-            name: v.name,
-            plateNumber: v.plateNumber,
+            name: v.vehicle_name, // Updated
+            plateNumber: v.plate_number, // Updated
             vin: v.vin,
-            type: v.type,
-            capacity: v.capacity
+            type: v.vehicle_type, // Updated
+            capacity: v.passenger_capacity || '' // Updated
         });
         setEditingId(v.id);
     };
 
-    const handleDelete = (id) => {
+
+    const handleDelete = async (id) => {
         if (!window.confirm('Delete this vehicle?')) return;
-        setVehicles(prev => prev.filter(v => v.id !== id));
+
+        try {
+            const res = await fetch(`http://localhost:5000/api/final-delete-vehicles/${id}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                // Remove deleted vehicle from state
+                setVehicles(prev => prev.filter(v => v.id !== id));
+            } else {
+                alert(data.message || 'Delete failed');
+            }
+        } catch (err) {
+            console.error('Delete failed', err);
+        }
     };
 
     return (
@@ -94,18 +129,18 @@ export default function Vehicles() {
             >
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <input
-                        name="name"
+                        name="name" // Updated
                         placeholder="Vehicle Name (e.g. School Van 1)"
-                        value={form.name}
+                        value={form.name} // Updated
                         onChange={handleChange}
                         className="border px-3 py-2 rounded-lg"
                         required
                     />
 
                     <input
-                        name="plateNumber"
+                        name="plateNumber" // Updated
                         placeholder="Plate Number"
-                        value={form.plateNumber}
+                        value={form.plateNumber} // Updated
                         onChange={handleChange}
                         className="border px-3 py-2 rounded-lg"
                         required
@@ -121,19 +156,19 @@ export default function Vehicles() {
                     />
 
                     <input
-                        name="type"
-                        value={form.type}
+                        name="type" // Updated
+                        value={form.type} // Updated
                         placeholder='ex. pickup - van'
                         onChange={handleChange}
                         className="border px-3 py-2 rounded-lg"
                     />
 
                     <input
-                        name="capacity"
+                        name="capacity" // Updated
                         type="number"
                         min="1"
                         placeholder="Passenger Capacity"
-                        value={form.capacity}
+                        value={form.capacity} // Updated
                         onChange={handleChange}
                         className="border px-3 py-2 rounded-lg"
                     />
@@ -142,6 +177,7 @@ export default function Vehicles() {
                 <div className="flex justify-end gap-3">
                     <button
                         type="submit"
+                        disabled={loading}
                         className="bg-[#96161C] text-white px-6 py-2 rounded-lg hover:bg-[#7a1217] transition"
                     >
                         {editingId ? 'Update Vehicle' : 'Add Vehicle'}

@@ -9,6 +9,8 @@ export default function Equipments() {
         model_id: ''
     });
     const [loading, setLoading] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+
 
     /* ================= FETCH ================= */
     const fetchEquipments = async () => {
@@ -34,36 +36,76 @@ export default function Equipments() {
     };
 
     const resetForm = () => {
-        setForm({ name: '', controlNumber: '', modelId: '' });
+        setForm({
+            name: '',
+            control_number: '',
+            model_id: ''
+        });
     };
+
 
     /* ================= CREATE ================= */
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
 
+        const url = editingId
+            ? `http://localhost:5000/api/final-update-equipment/${editingId}`
+            : 'http://localhost:5000/api/create-equipments';
+
+        const method = editingId ? 'PUT' : 'POST';
+
         try {
-            const res = await fetch(
-                'http://localhost:5000/api/create-equipments',
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(form)
-                }
-            );
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form)
+            });
 
             const data = await res.json();
 
             if (data.success) {
                 fetchEquipments();
                 resetForm();
+                setEditingId(null);
+            } else {
+                alert(data.message || 'Operation failed');
             }
         } catch (err) {
-            console.error('Create failed', err);
+            console.error('Submit failed', err);
         } finally {
             setLoading(false);
         }
     };
+    const handleEdit = (eq) => {
+        setForm({
+            name: eq.name,
+            control_number: eq.control_number,
+            model_id: eq.model_id || ''
+        });
+        setEditingId(eq.id);
+    };
+    const handleDelete = async (id) => {
+        if (!window.confirm('Delete this equipment?')) return;
+
+        try {
+            const res = await fetch(
+                `http://localhost:5000/api/final-delete-equipment/${id}`,
+                { method: 'DELETE' }
+            );
+
+            const data = await res.json();
+
+            if (data.success) {
+                setEquipments(prev => prev.filter(e => e.id !== id));
+            } else {
+                alert(data.message || 'Delete failed');
+            }
+        } catch (err) {
+            console.error('Delete failed', err);
+        }
+    };
+
 
     return (
         <div className="max-w-4xl mx-auto p-6">
@@ -111,8 +153,22 @@ export default function Equipments() {
                         disabled={loading}
                         className="bg-[#96161C] text-white px-6 py-2 rounded-lg hover:bg-[#7a1217]"
                     >
-                        Add Equipment
+                        {editingId ? 'Update Equipment' : 'Add Equipment'}
                     </button>
+
+                    {editingId && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                resetForm();
+                                setEditingId(null);
+                            }}
+                            className="bg-gray-200 px-6 py-2 rounded-lg ml-3"
+                        >
+                            Cancel
+                        </button>
+                    )}
+
                 </div>
             </form>
 
@@ -138,6 +194,22 @@ export default function Equipments() {
                                 <td className="px-4 py-2">{eq.name}</td>
                                 <td className="px-4 py-2">{eq.control_number}</td>
                                 <td className="px-4 py-2">{eq.model_id || '—'}</td>
+                                <td className="px-4 py-2 flex gap-3">
+                                    <button
+                                        onClick={() => handleEdit(eq)}
+                                        className="text-blue-600 hover:underline flex items-center gap-1"
+                                    >
+                                        Edit
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleDelete(eq.id)}
+                                        className="text-red-600 hover:underline flex items-center gap-1"
+                                    >
+                                        Delete
+                                    </button>
+                                </td>
+
                             </tr>
                         ))}
                     </tbody>

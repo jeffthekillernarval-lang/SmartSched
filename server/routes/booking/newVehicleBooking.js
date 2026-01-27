@@ -8,19 +8,21 @@ const pool = new Pool({
 
 router.post('/', async (req, res) => {
     const {
-        vehicle_Type,
+        vehicle_id,
         requestor,
-        department,
+        department_id,
         date,
         purpose,
         booker_id = 1,
-        deleted = false
+        deleted = false,
+        payment = 0,  // Default to 0 if not provided,
+        status
     } = req.body;
 
     const requiredFields = [
-        "vehicle_Type",
+        "vehicle_id",
         "requestor",
-        "department",
+        "department_id",
         "date",
         "purpose"
     ];
@@ -33,19 +35,20 @@ router.post('/', async (req, res) => {
     try {
         const result = await pool.query(
             `
-      INSERT INTO "VehicleBooking"
-      ("vehicle_Type", requestor, department, date, purpose, booker_id, deleted)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *
-      `,
+            INSERT INTO "VehicleBooking"
+            (vehicle_id, requestor, department_id, date, purpose, booker_id, deleted, payment, status)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+            RETURNING * 
+            `,
             [
-                vehicle_Type,
+                vehicle_id,
                 requestor,
-                department,
+                department_id,
                 date,
                 purpose,
                 booker_id,
-                deleted
+                deleted,
+                payment // Insert the payment value (defaults to 0 if not provided)
             ]
         );
 
@@ -56,7 +59,7 @@ router.post('/', async (req, res) => {
 
     } catch (err) {
         console.error("❌ DB insert error:", err);
-        res.status(500).json({ error: "Failed to create vehicle booking" });
+        res.status(500).json({ error: "Failed to create vehicle booking", details: err.message });
     }
 });
 

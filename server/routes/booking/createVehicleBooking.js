@@ -43,7 +43,7 @@ router.post('/', async (req, res) => {
             day: "numeric"
         });
 
-        return `- 🚗 ${v.vehicle_Type} for ${v.purpose} on ${newDate} requested by ${v.requestor} (${v.department})`;
+        return `- 🚗 Vehicle ID ${v.vehicle_id} for ${v.purpose} on ${newDate} requested by ${v.requestor} (Department ID ${v.department_id})`;
     }).join('\n');
 
     const formattedResponse = [
@@ -78,15 +78,11 @@ If they want a facility booking, respond ONLY with JSON in this format:
 If they want a vehicle booking, respond ONLY with JSON in this format:
 {
   "intent": "create_vehicle_booking",
-  "vehicle_Type": "<string>",
+  "vehicle_id": "<number>",
   "requestor": "<string>",
-  "department": "<string>",
+  "department_id": "<number>",
   "date": "<YYYY-MM-DD>",
-  "purpose": "<string>",
-  "booker_id": 1,
-  "deleted": false
-
-  
+  "purpose": "<string>"
 }
 Never use "create_booking" — always use either "create_facility_booking" or "create_vehicle_booking".
 Otherwise, respond normally in Markdown.
@@ -196,14 +192,16 @@ ${formattedResponse}
             const backendURL = `${process.env.BASE_URL || "http://localhost:5000"}/api/vehicle-booking`;
             try {
                 const response = await axios.post(backendURL, {
-                    vehicle_Type: bookingData.vehicle_Type,
+                    vehicle_id: Number(bookingData.vehicle_id),
                     requestor: bookingData.requestor,
-                    department: bookingData.department,
+                    department_id: Number(bookingData.department_id),
                     date: bookingData.date,
                     purpose: bookingData.purpose,
                     booker_id: bookingData.booker_id || 1,
-                    deleted: bookingData.deleted ?? false
+                    deleted: false
+                    // ❌ DO NOT send status
                 });
+
                 return res.json({
                     reply: `✅ Vehicle booking created successfully!\n\n**Vehicle:** ${bookingData.vehicle_Type}\n**Date:** ${bookingData.date}\n**Purpose:** ${bookingData.purpose}\n**Requestor:** ${bookingData.requestor} (${bookingData.department})`,
                     result: response.data

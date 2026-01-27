@@ -5,6 +5,7 @@ export default function Facilities() {
     const [facilities, setFacilities] = useState([]);
     const [form, setForm] = useState({ name: '', capacity: '', location: '' });
     const [loading, setLoading] = useState(false);
+    const [editingId, setEditingId] = useState(null);
 
     /* ================= FETCH ================= */
     const fetchFacilities = async () => {
@@ -32,26 +33,62 @@ export default function Facilities() {
         e.preventDefault();
         setLoading(true);
 
+        const url = editingId
+            ? `http://localhost:5000/api/update-facilities/${editingId}`
+            : 'http://localhost:5000/api/create-facilities';
+
+        const method = editingId ? 'PUT' : 'POST';
+
         try {
-            const res = await fetch('http://localhost:5000/api/create-facilities', {
-                method: 'POST',
+            const res = await fetch(url, {
+                method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(form)
             });
+
             const data = await res.json();
 
             if (data.success) {
-                fetchFacilities(); // reload list
+                fetchFacilities();
                 resetForm();
+                setEditingId(null);
             } else {
-                alert('Failed to create facility');
+                alert(data.message || 'Operation failed');
             }
         } catch (err) {
-            console.error('Create failed', err);
+            console.error('Submit failed', err);
         } finally {
             setLoading(false);
         }
     };
+    const handleEdit = (facility) => {
+        setForm({
+            name: facility.name,
+            capacity: facility.capacity,
+            location: facility.location
+        });
+        setEditingId(facility.id);
+    };
+    const handleDelete = async (id) => {
+        if (!window.confirm('Delete this facility?')) return;
+
+        try {
+            const res = await fetch(
+                `http://localhost:5000/api/delete-facilities/${id}`,
+                { method: 'DELETE' }
+            );
+            const data = await res.json();
+
+            if (data.success) {
+                setFacilities(prev => prev.filter(f => f.id !== id));
+            } else {
+                alert(data.message || 'Delete failed');
+            }
+        } catch (err) {
+            console.error('Delete failed', err);
+        }
+    };
+
 
     return (
         <div className="max-w-4xl mx-auto p-6">
@@ -99,8 +136,22 @@ export default function Facilities() {
                         disabled={loading}
                         className="bg-[#96161C] text-white px-6 py-2 rounded-lg hover:bg-[#7a1217]"
                     >
-                        Add Facility
+                        {editingId ? 'Update Facility' : 'Add Facility'}
                     </button>
+
+                    {editingId && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                resetForm();
+                                setEditingId(null);
+                            }}
+                            className="bg-gray-200 px-6 py-2 rounded-lg"
+                        >
+                            Cancel
+                        </button>
+                    )}
+
                 </div>
             </form>
 
@@ -114,6 +165,7 @@ export default function Facilities() {
                             <th className="px-4 py-2 rounded-tl-xl">Name</th>
                             <th className="px-4 py-2">Capacity</th>
                             <th className="px-4 py-2">Location</th>
+                            <th className="px-4 py-2 text-right rounded-tr-xl">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -122,6 +174,22 @@ export default function Facilities() {
                                 <td className="px-4 py-2">{f.name}</td>
                                 <td className="px-4 py-2">{f.capacity}</td>
                                 <td className="px-4 py-2">{f.location}</td>
+                                <td className="px-4 py-2 flex justify-end gap-3">
+                                    <button
+                                        onClick={() => handleEdit(f)}
+                                        className="text-blue-600 hover:underline flex items-center gap-1"
+                                    >
+                                        <Edit size={16} /> Edit
+                                    </button>
+
+                                    <button
+                                        onClick={() => handleDelete(f.id)}
+                                        className="text-red-600 hover:underline flex items-center gap-1"
+                                    >
+                                        <Trash size={16} /> Delete
+                                    </button>
+                                </td>
+
                             </tr>
                         ))}
                         {facilities.length === 0 && (

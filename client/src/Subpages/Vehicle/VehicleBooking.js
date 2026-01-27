@@ -16,6 +16,7 @@ export default function VehicleBooking() {
                 const data = await res.json();
                 if (data.success) {
                     setAffiliations(data.affiliations); // array of {id, abbreviation, meaning, moderator}
+                    console.log("THIS FCKING DATA", JSON.stringify(data, null, 2));
                 }
             } catch (err) {
                 console.error('Error fetching affiliations:', err);
@@ -24,7 +25,24 @@ export default function VehicleBooking() {
 
         fetchAffiliations();
     }, []);
+    const getAbbreviation = (id) => {
+        console.log('Department ID:', id); // Log department_id
+        console.log('Affiliations:', affiliations); // Log the full affiliations array
 
+        // Convert the department_id (string) to a number
+        const affiliation = affiliations.find(a => a.id === Number(id.trim())); // Convert department_id to a number
+
+        console.log('Found Affiliation:', affiliation); // Log the result of the search
+
+        return affiliation ? affiliation.abbreviation : `ID: ${id}`;
+    };
+
+
+    function getTomorrowDate() {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        return tomorrow.toISOString().split('T')[0];
+    }
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -64,12 +82,13 @@ export default function VehicleBooking() {
     }, []);
     const [expandedRow, setExpandedRow] = useState(null);
     const [form, setForm] = useState({
-        vehicleType: '',
+        vehicleId: '',     // store vehicle ID instead of name
         requestor: '',
+        affiliationId: '', // store affiliation/department ID
         date: '',
-        department: '',
         purpose: ''
     });
+
     const [editingId, setEditingId] = useState(null);
     const downloadReceipt = (booking) => {
         const receiptHtml = `
@@ -132,6 +151,41 @@ export default function VehicleBooking() {
         link.click();
         document.body.removeChild(link);
     };
+    const [paymentValue, setPaymentValue] = useState(0); // Track the payment value
+    const [showPaymentModal, setShowPaymentModal] = useState(false); // Track modal visibility
+    const [editingBookingId, setEditingBookingId] = useState(null); // Track the bookingId for editing
+
+    // Show the modal with the correct booking ID
+    const openPaymentModal = (bookingId, currentPayment) => {
+        setEditingBookingId(bookingId); // Set the booking ID for the payment update
+        setPaymentValue(currentPayment); // Optionally set the current payment value for the input field
+        setShowPaymentModal(true); // Show the modal
+    };
+
+    // Update the payment value
+    const updatePayment = async (e) => {
+        e.preventDefault(); // Prevent default form submission behavior
+
+        try {
+            const res = await fetch(`http://localhost:5000/api/edit-payment/${editingBookingId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ payment: paymentValue }) // Pass the payment value from state
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                alert('Payment updated successfully!');
+                // Optionally update local state to reflect the new payment
+                setShowPaymentModal(false); // Hide modal
+            } else {
+                alert(data.message || 'Failed to update payment');
+            }
+        } catch (err) {
+            console.error('Payment update error:', err);
+            alert('Error updating payment.');
+        }
+    };
 
 
     const handleChange = (e) => {
@@ -143,63 +197,90 @@ export default function VehicleBooking() {
         const currentUserId = localStorage.getItem('currentUserId');
 
         const newBooking = {
-            vehicle_Type: form.vehicleType,
+            vehicle_id: Number(form.vehicleId),
             requestor: form.requestor,
-            department: form.affiliation,
+            department_id: Number(form.affiliationId),
             date: form.date,
             purpose: form.purpose,
             booker_id: Number(currentUserId),
         };
 
-        let hasConflict = false;
-
-        try {
-            // check conflicts first
-            const res = await fetch(
-                `http://localhost:5000/api/vehicle-conflicts?vehicleType=${encodeURIComponent(form.vehicleType)}&date=${encodeURIComponent(form.date)}`
-            );
-            const data = await res.json();
-
-            if (data.success && data.bookings.length > 0 && editingId === null) {
-                hasConflict = true;
-                setConflicts(data.bookings); // ⬅️ show them
-            }
-        } catch (err) {
-            console.error("Error checking vehicle conflicts:", err);
-        }
-
-        if (hasConflict) {
-            alert("Conflict detected: This vehicle is already booked on that date.");
-            return;
-        }
-
-        try {
-            const res = await fetch('http://localhost:5000/api/create-vehicle-booking', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newBooking),
-            });
-
-            const data = await res.json();
-            if (data.success) {
-                setBookings([...bookings, newBooking]);
-                setForm({
-                    vehicleType: '',
-                    requestor: '',
-                    date: '',
-                    department: '',
-                    purpose: ''
+        if (editingId !== null) {
+            // Edit existing booking
+            try {
+                const res = await fetch(`http://localhost:5000/api/edit-vehicle-booking/${editingId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newBooking),
                 });
-                setShowForm(false);
-                setConflicts([]); // clear
-            } else {
-                alert(data.message || 'Failed to create vehicle booking');
+
+                const data = await res.json();
+                if (data.success) {
+                    // Update the booking in the state
+                    setBookings(bookings.map(b => b.id === editingId ? { ...b, ...newBooking } : b));
+                    setShowForm(false);
+                    setConflicts([]); // clear conflicts
+                } else {
+                    alert(data.message || 'Failed to update vehicle booking');
+                }
+            } catch (error) {
+                console.error('Error updating booking:', error);
+                alert('Server error, could not update booking.');
             }
-        } catch (error) {
-            console.error('Error submitting booking:', error);
-            alert('Server error, could not create booking.');
+        } else {
+            // Create new booking (same as before)
+            let hasConflict = false;
+
+            try {
+                // Check for conflicts first
+                const res = await fetch(
+                    `http://localhost:5000/api/vehicle-conflicts?vehicleId=${encodeURIComponent(form.vehicleId)}&date=${encodeURIComponent(form.date)}`
+                );
+                const data = await res.json();
+
+                if (data.success && data.bookings.length > 0) {
+                    hasConflict = true;
+                    setConflicts(data.bookings); // Show conflicts
+                }
+            } catch (err) {
+                console.error('Error checking vehicle conflicts:', err);
+            }
+
+            if (hasConflict) {
+                alert('Conflict detected: This vehicle is already booked on that date.');
+                return;
+            }
+
+            try {
+                const res = await fetch('http://localhost:5000/api/create-vehicle-booking', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newBooking),
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    setBookings([...bookings, newBooking]);
+                    setForm({
+                        vehicleType: '',
+                        requestor: '',
+                        date: '',
+                        department: '',
+                        purpose: ''
+                    });
+                    setShowForm(false);
+                    setConflicts([]); // clear
+                } else {
+                    alert(data.message || 'Failed to create vehicle booking');
+                }
+            } catch (error) {
+                console.error('Error submitting booking:', error);
+                alert('Server error, could not create booking.');
+            }
         }
     };
+
+
     useEffect(() => {
         const fetchBookings = async () => {
             try {
@@ -219,6 +300,37 @@ export default function VehicleBooking() {
         fetchBookings();
     }, []);
 
+    const [editStatusId, setEditStatusId] = useState(null); // Track the booking ID being edited
+
+    const handleStatusChange = async (bookingId, newStatus) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/update-status/${bookingId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                // Update the booking status in the state
+                setBookings((prevBookings) =>
+                    prevBookings.map((b) =>
+                        b.id === bookingId ? { ...b, status: data.booking.status } : b
+                    )
+                );
+                setEditStatusId(null); // Exit edit mode
+            } else {
+                alert(data.message || 'Failed to update status');
+            }
+        } catch (err) {
+            console.error('Error updating status:', err);
+            alert('Server error, could not update status.');
+        }
+    };
+
+
+    const statuses = ['Pending', 'Approved', 'Declined']; // Define available statuses
+
     function toTitleCase(str) {
         if (!str) return '';
         return str.replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -235,18 +347,28 @@ export default function VehicleBooking() {
     const handleEdit = (index) => {
         const b = bookings[index];
 
-        setEditingId(b.id); // use id, not index
+        setEditingId(b.id);
+
+        // Adjust the date by adding 1 day
+        const date = new Date(b.date);
+        date.setDate(date.getDate() + 1); // Increment the day by 1
+
+        // Format the date as YYYY-MM-DD
+        const adjustedDate = date.toISOString().split('T')[0];
+
         setForm({
-            vehicleType: b.vehicleType || b.vehicle_Type || '',
+            vehicleId: b.vehicle_id || '',       // ID
             requestor: b.requestor || '',
-            department: b.department || '',
-            date: b.date ? b.date.split('T')[0] : '',
+            affiliationId: b.department_id || '', // ID
+            date: adjustedDate,                  // Adjusted date (incremented by 1 day)
             purpose: b.purpose || ''
         });
 
         setShowForm(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
+
 
     const [filter, setFilter] = useState({
         search: '',
@@ -311,17 +433,21 @@ export default function VehicleBooking() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                             <div>
                                 <label className="block text-sm font-medium mb-1">Vehicle Type*</label>
+                                {/* Vehicle Type */}
                                 <select
-                                    name="vehicleType"
-                                    value={form.vehicleType}
+                                    name="vehicleId"
+                                    value={form.vehicleId}
                                     onChange={handleChange}
                                     className="w-full border rounded-lg px-4 py-2"
                                     required
                                 >
                                     <option value="">Select...</option>
                                     {availableVehicles.map(v => (
-                                        <option key={v.id} value={v.vehicle_name}>
-                                            {toTitleCase(v.vehicle_name)}
+                                        <option
+                                            key={v.id}
+                                            value={v.id} // ID stored
+                                        >
+                                            {toTitleCase(v.vehicle_name)} - {v.vehicle_type} - {v.passenger_capacity} capacity
                                         </option>
                                     ))}
                                 </select>
@@ -342,16 +468,17 @@ export default function VehicleBooking() {
                             </div>
                             <div>
                                 <label className="block text-sm font-medium mb-1">Affiliation*</label>
+                                {/* Affiliation / Department */}
                                 <select
-                                    name="affiliation"
-                                    value={form.affiliation}
+                                    name="affiliationId"
+                                    value={form.affiliationId}
                                     onChange={handleChange}
                                     className="w-full border rounded-lg px-4 py-2"
                                     required
                                 >
                                     <option value="">Select...</option>
                                     {affiliations.map(a => (
-                                        <option key={a.id} value={a.abbreviation}>
+                                        <option key={a.id} value={a.id}>
                                             {a.abbreviation} - {a.meaning}
                                         </option>
                                     ))}
@@ -362,6 +489,7 @@ export default function VehicleBooking() {
                                 <label className="block text-sm font-medium mb-1">Date*</label>
                                 <input
                                     type="date"
+                                    min={getTomorrowDate()}
                                     name="date"
                                     value={form.date}
                                     onChange={handleChange}
@@ -411,9 +539,9 @@ export default function VehicleBooking() {
                                     <tbody className="bg-white divide-y divide-gray-100">
                                         {conflicts.map((c, i) => (
                                             <tr key={i}>
-                                                <td className="px-4 py-2">{c.vehicle_Type}</td>
+                                                <td className="px-4 py-2">{c.vehicle_id}</td>
                                                 <td className="px-4 py-2">{c.requestor}</td>
-                                                <td className="px-4 py-2">{c.department}</td>
+                                                <td className="px-4 py-2">{c.department_id}</td>
                                                 <td className="px-4 py-2">
                                                     {new Date(c.date).toLocaleDateString('en-US')}
                                                 </td>
@@ -530,13 +658,15 @@ export default function VehicleBooking() {
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Department</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Date</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Purpose</th>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Status</th>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Payment</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase rounded-tr-xl">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
                         {bookings.length === 0 ? (
                             <tr>
-                                <td colSpan={6} className="text-center py-8 text-gray-500">No vehicle bookings yet.</td>
+                                <td colSpan={8} className="text-center py-8 text-gray-500">No vehicle bookings yet.</td>
                             </tr>
                         ) : (
                             bookings.filter(b =>
@@ -551,53 +681,160 @@ export default function VehicleBooking() {
                                         className="hover:bg-gray-50 transition cursor-pointer"
                                         onClick={() => setExpandedRow(expandedRow === index ? null : index)}
                                     >
-                                        <td className="px-6 py-4">{toTitleCase(b.vehicleType || b.vehicle_Type)}</td>
+                                        {/* Vehicle Name */}
+                                        <td className="px-6 py-4 font-medium text-gray-900">
+                                            {(() => {
+                                                if (!b.vehicle_id) {
+                                                    console.error("Vehicle ID is missing:", b.vehicle_id);
+                                                    return `ID: ${b.vehicle_id}`;
+                                                }
+
+                                                const vehicle = availableVehicles?.find(v => v.id === Number(b.vehicle_id));
+                                                return vehicle ? toTitleCase(vehicle.vehicle_name) : 'Unknown Vehicle'; // Updated fallback
+                                            })()}
+                                        </td>
+
+                                        {/* Requestor */}
                                         <td className="px-6 py-4">{toTitleCase(b.requestor)}</td>
-                                        <td className="px-6 py-4">{toTitleCase(b.department)}</td>
-                                        <td className="px-6 py-4">{new Date(b.event_date || b.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: '2-digit' })}</td>
+
+                                        {/* Department Abbreviation */}
+                                        <td className="px-6 py-4">
+                                            {(() => {
+                                                if (!b.department_id) {
+                                                    console.error("Department ID is missing:", b.department_id);
+                                                    return `ID: ${b.department_id}`;
+                                                }
+
+                                                const affiliation = affiliations?.find(a => a.id === Number(b.department_id));
+                                                return affiliation
+                                                    ? `${affiliation.abbreviation}`
+                                                    : 'Unknown Affiliation'; // Updated fallback
+                                            })()}
+                                        </td>
+
+                                        {/* Event Date */}
+                                        <td className="px-6 py-4">
+                                            {new Date(b.event_date || b.date).toLocaleDateString('en-US', {
+                                                year: 'numeric',
+                                                month: 'long',
+                                                day: '2-digit'
+                                            })}
+                                        </td>
+
+                                        {/* Purpose */}
                                         <td className="px-6 py-4">{b.purpose}</td>
+                                        <td className="px-6 py-4 " onClick={(e) => e.stopPropagation()}>
+                                            {editStatusId === b.id ? (
+                                                <select
+                                                    value={b.status}
+                                                    onChange={(e) => handleStatusChange(b.id, e.target.value)}
+                                                    onBlur={() => setEditStatusId(null)} // Exit edit mode on blur
+                                                    autoFocus
+                                                    className="border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-[#96161C]"
+                                                >
+                                                    {statuses.map((status) => (
+                                                        <option key={status} value={status}>
+                                                            {status}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <span
+                                                    className={`px-3 py-1 rounded-full text-xs font-bold shadow
+                                                    ${b.status === 'Approved'
+                                                            ? 'bg-green-100 text-green-700 border border-green-300'
+                                                            : b.status === 'Pending'
+                                                                ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                                                                : 'bg-red-100 text-red-700 border border-red-300'
+                                                        }`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditStatusId(b.id); // Enable edit mode for this booking
+                                                    }}
+                                                >
+                                                    {b.status}
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="px-6 py-4">{b.payment}</td>
+
+                                        {/* Admin or User-specific Actions */}
                                         {isAdmin ? (
-                                            <td className="px-1 py-2 flex gap-2">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
-                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
-                                                >
-                                                    Edit
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
-                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </td>
+                                            <>
+                                                <td className="px-1 py-2 flex gap-2">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
+                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
+                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                    <button onClick={() => openPaymentModal(b.id, b.payment)} className="px-4 py-1 text-sm font-semibold rounded-full border border-blue-600 text-blue-600">
+                                                        Edit Payment
+                                                    </button>
+                                                </td>
+
+                                                {/* Payment Edit Modal */}
+                                                {showPaymentModal && (
+                                                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
+                                                        <div className="bg-white p-6 rounded-lg shadow-lg w-96">
+                                                            <h3 className="text-xl font-semibold mb-4">Edit Payment</h3>
+                                                            <form onSubmit={updatePayment}>
+                                                                <label className="block text-sm font-medium mb-1">Payment Amount*</label>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={paymentValue}
+                                                                    onChange={(e) => setPaymentValue(e.target.value)}
+                                                                    className="w-full border rounded-lg px-4 py-2 mb-4"
+                                                                    required
+                                                                />
+                                                                <div className="flex gap-3 justify-end">
+                                                                    <button type="submit" className="bg-[#96161C] text-white px-8 py-2 rounded-lg">
+                                                                        Save
+                                                                    </button>
+                                                                    <button type="button" onClick={() => setShowPaymentModal(false)} className="bg-gray-200 px-8 py-2 rounded-lg">
+                                                                        Cancel
+                                                                    </button>
+                                                                </div>
+                                                            </form>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
                                         ) : (
-                                            parseInt(b.booker_id) === parseInt(currentUserId)
-                                                ? (
-                                                    <td className="px-1 py-2 flex gap-2">
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
-                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
-                                                        >
-                                                            Edit
-                                                        </button>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
-                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    </td>
-                                                ) : (
-                                                    <td className="px-6 py-4 font-semibold text-[#daa7aa]">Hidden</td>
-                                                )
+                                            parseInt(b.booker_id) === parseInt(currentUserId) ? (
+                                                <td className="px-1 py-2 flex gap-2">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
+                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
+                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </td>
+                                            ) : (
+                                                <td className="px-6 py-4 font-semibold text-[#daa7aa]">Hidden</td>
+                                            )
                                         )}
+
                                     </tr>
+
 
                                     {/* Expanded Detail Row */}
                                     {expandedRow === index && (
                                         <tr className="bg-gray-50">
-                                            <td colSpan={6} className="px-6 py-4">
+                                            <td colSpan={8} className="px-6 py-4">
                                                 <div className="p-4 rounded-lg border border-gray-200 bg-white flex flex-col md:flex-row md:justify-between gap-4 items-start">
 
                                                     {/* Booking Details */}

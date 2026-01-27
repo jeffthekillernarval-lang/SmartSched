@@ -12,22 +12,23 @@ const pool = new Pool({
  */
 router.post('/', async (req, res) => {
     const {
-        vehicle_Type,
+        vehicle_id,
         requestor,
-        department,
+        department_id,
         date,
         purpose,
-        booker_id,
+        booker_id = 1,
+        deleted = false,
+        payment = 0
     } = req.body;
 
     // ✅ Validate required fields
     const requiredFields = {
-        vehicle_Type,
+        vehicle_id,
         requestor,
-        department,
+        department_id,
         date,
         purpose,
-        booker_id,
     };
 
     const missing = Object.entries(requiredFields)
@@ -44,19 +45,31 @@ router.post('/', async (req, res) => {
     try {
         const result = await pool.query(
             `
-    INSERT INTO "VehicleBooking"
-        ("vehicle_Type", requestor, department, date, purpose, booker_id, deleted)
-    VALUES
-        ($1, $2, $3, $4, $5, $6, false)
-    RETURNING *
-    `,
-            [
-                vehicle_Type,
+            INSERT INTO "VehicleBooking"
+            (
+                vehicle_id,
                 requestor,
-                department,
+                department_id,
+                date,
+                purpose,
+                booker_id,
+                deleted,
+                payment,
+                status
+            )
+            VALUES
+            ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')
+            RETURNING *
+            `,
+            [
+                vehicle_id,
+                requestor,
+                department_id,
                 date,
                 purpose,
                 Number(booker_id),
+                deleted,
+                payment
             ]
         );
 
@@ -70,6 +83,7 @@ router.post('/', async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Server error creating vehicle booking',
+            details: err.message
         });
     }
 });

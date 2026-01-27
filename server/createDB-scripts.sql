@@ -17,8 +17,7 @@ TABLESPACE pg_default;
 ALTER TABLE IF EXISTS public."Actions"
     OWNER to postgres;
 
-
--- Table: public.Affiliations
+    -- Table: public.Affiliations
 
 -- DROP TABLE IF EXISTS public."Affiliations";
 
@@ -36,9 +35,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Affiliations"
     OWNER to postgres;
-
-
--- Table: public.Booking
+    -- Table: public.Booking
 
 -- DROP TABLE IF EXISTS public."Booking";
 
@@ -67,10 +64,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Booking"
     OWNER to postgres;
-
-
-
--- Table: public.Equipment
+    -- Table: public.Equipment
 
 -- DROP TABLE IF EXISTS public."Equipment";
 
@@ -88,10 +82,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Equipment"
     OWNER to postgres;
-
-
-
--- Table: public.Equipments
+    -- Table: public.Equipments
 
 -- DROP TABLE IF EXISTS public."Equipments";
 
@@ -109,9 +100,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Equipments"
     OWNER to postgres;
-
-
--- Table: public.Facilities
+    -- Table: public.Facilities
 
 -- DROP TABLE IF EXISTS public."Facilities";
 
@@ -129,10 +118,23 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Facilities"
     OWNER to postgres;
+    -- Table: public.Facility-Vehicle-Pivot
 
+-- DROP TABLE IF EXISTS public."Facility-Vehicle-Pivot";
 
+CREATE TABLE IF NOT EXISTS public."Facility-Vehicle-Pivot"
+(
+    pivot_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    booking_id character varying COLLATE pg_catalog."default",
+    vehiclebooking_id character varying COLLATE pg_catalog."default",
+    CONSTRAINT "Facility-Vehicle-Pivot_pkey" PRIMARY KEY (pivot_id)
+)
 
--- Table: public.Notification
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."Facility-Vehicle-Pivot"
+    OWNER to postgres;
+    -- Table: public.Notification
 
 -- DROP TABLE IF EXISTS public."Notification";
 
@@ -153,10 +155,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Notification"
     OWNER to postgres;
-
-
-
--- Table: public.User
+    -- Table: public.User
 
 -- DROP TABLE IF EXISTS public."User";
 
@@ -176,22 +175,22 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."User"
     OWNER to postgres;
-
-
--- Table: public.VehicleBooking
+    -- Table: public.VehicleBooking
 
 -- DROP TABLE IF EXISTS public."VehicleBooking";
 
 CREATE TABLE IF NOT EXISTS public."VehicleBooking"
 (
     id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
-    "vehicle_Type" character varying(20) COLLATE pg_catalog."default",
+    vehicle_id character varying(20) COLLATE pg_catalog."default",
     requestor character varying(20) COLLATE pg_catalog."default",
-    department character varying(20) COLLATE pg_catalog."default",
+    department_id character varying(20) COLLATE pg_catalog."default",
     date date,
     purpose character varying(100) COLLATE pg_catalog."default",
     booker_id integer,
     deleted boolean NOT NULL DEFAULT false,
+    payment integer DEFAULT 0,
+    status character varying COLLATE pg_catalog."default",
     CONSTRAINT "VehicleBooking_pkey" PRIMARY KEY (id)
 )
 
@@ -199,10 +198,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."VehicleBooking"
     OWNER to postgres;
-
-
-
--- Table: public.Vehicles
+    -- Table: public.Vehicles
 
 -- DROP TABLE IF EXISTS public."Vehicles";
 

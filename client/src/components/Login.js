@@ -9,7 +9,8 @@ function Login() {
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
-    const handleLogin = async () => {
+    const handleLogin = async (e) => {
+        e.preventDefault();
         setError('');
         try {
             const response = await fetch('http://localhost:5000/api/login', {
@@ -39,7 +40,7 @@ function Login() {
 
 
     return (
-        <div className="relative min-h-screen flex justify-center bg-white">
+        <form className="relative min-h-screen flex justify-center bg-white" onSubmit={handleLogin}>
             <div className='flex h-5/6 my-auto'>
                 <div className="flex-col flex self-center lg:px-14 sm:max-w-4xl xl:max-w-md h-full">
                     <div className="self-start hidden lg:flex flex-col text-gray-300 text-center">
@@ -84,9 +85,8 @@ function Login() {
 
 
                             <button
-                                type="button"
+                                type="submit"
                                 className="w-full flex justify-center text-white p-3 rounded-lg font-semibold"
-                                onClick={handleLogin}
                                 style={{ backgroundColor: '#E74A3B' }}
                             >
                                 Sign in
@@ -102,7 +102,7 @@ function Login() {
                     </div>
                 </div>
             </div>
-        </div>
+        </form>
     );
 }
 

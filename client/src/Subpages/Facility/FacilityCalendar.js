@@ -56,7 +56,13 @@ export default function MyCalendar() {
                     const formatted = data.bookings
                         .filter(b => b.event_date) // only keep bookings with a valid date
                         .map(b => {
-                            const dateOnly = b.event_date.split('T')[0]; // safe now
+                            const addOneDay = (dateStr) => {
+                                const d = new Date(dateStr);
+                                d.setDate(d.getDate() + 1);
+                                return d.toISOString().split('T')[0];
+                            };
+
+                            const dateOnly = addOneDay(b.event_date);
                             const startTime = b.starting_time || '00:00';
                             const endTime = b.ending_time || '23:59';
 

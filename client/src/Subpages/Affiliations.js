@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PlusCircle, Trash, Edit, Building2 } from 'lucide-react';
+import { Trash, Edit, Building2 } from 'lucide-react';
 
 export default function Affiliations() {
     const [affiliations, setAffiliations] = useState([]);
@@ -40,8 +40,14 @@ export default function Affiliations() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const res = await fetch('http://localhost:5000/api/create-affiliation', {
-            method: 'POST',
+        const url = editingId
+            ? `http://localhost:5000/api/update-affiliation/${editingId}`
+            : 'http://localhost:5000/api/create-affiliation';
+
+        const method = editingId ? 'PUT' : 'POST';
+
+        const res = await fetch(url, {
+            method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 abbr: form.abbr,
@@ -53,12 +59,24 @@ export default function Affiliations() {
         const data = await res.json();
 
         if (data.success) {
-            setAffiliations(prev => [...prev, data.affiliation]);
+            if (editingId) {
+                // update list in-place
+                setAffiliations(prev =>
+                    prev.map(a =>
+                        a.id === editingId ? data.affiliation : a
+                    )
+                );
+            } else {
+                // add new
+                setAffiliations(prev => [...prev, data.affiliation]);
+            }
+
             resetForm();
         } else {
-            alert('Failed to create affiliation');
+            alert(data.message || 'Operation failed');
         }
     };
+
 
 
     const handleEdit = (aff) => {
@@ -70,10 +88,28 @@ export default function Affiliations() {
         setEditingId(aff.id);
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         if (!window.confirm('Delete this affiliation?')) return;
-        setAffiliations(prev => prev.filter(a => a.id !== id));
+
+        try {
+            const res = await fetch(
+                `http://localhost:5000/api/delete-affiliation/${id}`,
+                { method: 'DELETE' }
+            );
+
+            const data = await res.json();
+
+            if (data.success) {
+                setAffiliations(prev => prev.filter(a => a.id !== id));
+            } else {
+                alert(data.message || 'Failed to delete affiliation');
+            }
+        } catch (err) {
+            console.error('Delete failed:', err);
+            alert('Server error');
+        }
     };
+
 
     return (
         <div className="max-w-4xl mx-auto p-6">
