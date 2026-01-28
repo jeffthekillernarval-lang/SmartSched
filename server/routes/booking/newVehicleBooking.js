@@ -12,7 +12,7 @@ router.post('/', async (req, res) => {
         driver_id,
         requestor,
         department_id,
-        date,
+        dates, // this should now be an array of dates
         purpose,
         destination,
         booker_id = 1,
@@ -21,18 +21,10 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     // required fields
-    const requiredFields = [
-        "vehicle_id",
-        "driver_id",
-        "requestor",
-        "department_id",
-        "date",
-        "purpose",
-        "destination"
-    ];
-
+    const requiredFields = ["vehicle_id", "driver_id", "requestor", "department_id", "dates", "purpose", "destination"];
     const missing = requiredFields.filter(f =>
-        req.body[f] === undefined || req.body[f] === null || req.body[f] === ""
+        req.body[f] === undefined || req.body[f] === null ||
+        (Array.isArray(req.body[f]) && req.body[f].length === 0) || req.body[f] === ""
     );
 
     if (missing.length > 0) {
@@ -43,37 +35,38 @@ router.post('/', async (req, res) => {
         });
     }
 
-    try {
-        // 1️⃣ Check for driver conflict
-        const conflictCheck = await pool.query(
-            `
-            SELECT id
-            FROM "VehicleBooking"
-            WHERE driver_id = $1
-              AND date = $2
-              AND deleted = false
-            LIMIT 1
-            `,
-            [driver_id, date]
-        );
+    // Ensure dates is an array
+    const dateArray = Array.isArray(dates) ? dates : [dates];
 
-        if (conflictCheck.rows.length > 0) {
+    try {
+        // 1️⃣ Check driver conflicts for any of the dates
+        const conflictCheck = await pool.query(`
+            SELECT id, unnest(dates) as date
+            FROM "VehicleBooking"
+            WHERE driver_id = $1 AND deleted = false
+        `, [driver_id]);
+
+        const conflictingDates = conflictCheck.rows
+            .map(b => b.date.toISOString().slice(0, 10)) // convert to YYYY-MM-DD
+            .filter(d => dateArray.includes(d));
+
+        if (conflictingDates.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: "Driver is already booked on this date!"
+                message: "Driver is already booked on some dates!",
+                conflictDates: conflictingDates
             });
         }
 
-        // 2️⃣ Insert booking
-        const result = await pool.query(
-            `
+        // 2️⃣ Insert booking (all dates in one row using date[] column)
+        const result = await pool.query(`
             INSERT INTO "VehicleBooking"
             (
                 vehicle_id,
                 driver_id,
                 requestor,
                 department_id,
-                date,
+                dates,
                 purpose,
                 destination,
                 booker_id,
@@ -81,23 +74,20 @@ router.post('/', async (req, res) => {
                 payment,
                 status
             )
-            VALUES
-            ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Pending')
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Pending')
             RETURNING *
-            `,
-            [
-                Number(vehicle_id),
-                Number(driver_id),
-                requestor,
-                Number(department_id),
-                date,
-                purpose,
-                destination,
-                Number(booker_id),
-                deleted,
-                Number(payment)
-            ]
-        );
+        `, [
+            Number(vehicle_id),
+            Number(driver_id),
+            requestor,
+            Number(department_id),
+            dateArray,   // <-- insert as array
+            purpose,
+            destination,
+            Number(booker_id),
+            deleted,
+            Number(payment)
+        ]);
 
         res.status(201).json({
             success: true,

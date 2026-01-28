@@ -83,14 +83,27 @@ export default function VehicleBooking() {
         setIsAdmin(storedRole === 'admin');
     }, []);
     const [expandedRow, setExpandedRow] = useState(null);
+    // const [form, setForm] = useState({
+    //     vehicleId: "",
+    //     requestor: "",
+    //     affiliationId: "",
+    //     date: "",
+    //     purpose: "",
+    //     driverId: "",
+    //     destination: "",
+    // });
     const [form, setForm] = useState({
         vehicleId: "",
         requestor: "",
         affiliationId: "",
-        date: "",
+        mode: "single", // "single", "specific", "range"
+        date: "",       // for single
+        specificDates: ["", "", "", ""], // up to 4
+        rangeStart: "",
+        rangeEnd: "",
         purpose: "",
         driverId: "",
-        destination: "",
+        destination: ""
     });
 
 
@@ -229,16 +242,32 @@ export default function VehicleBooking() {
 
         const currentUserId = localStorage.getItem("currentUserId");
 
+        let datesArray = [];
+        if (form.mode === "single") datesArray = [form.date];
+        if (form.mode === "specific") datesArray = form.specificDates.filter(d => d);
+        if (form.mode === "range") {
+            let start = new Date(form.rangeStart);
+            let end = new Date(form.rangeEnd);
+            if ((end - start) / (1000 * 60 * 60 * 24) > 6) {
+                alert("Date range cannot exceed 1 week.");
+                return;
+            }
+            for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+                datesArray.push(d.toISOString().split('T')[0]);
+            }
+        }
+
         const newBooking = {
             vehicle_id: Number(form.vehicleId),
-            driver_id: form.driverId ? Number(form.driverId) : null, // ✅ important
+            driver_id: form.driverId ? Number(form.driverId) : null,
             requestor: form.requestor,
             department_id: Number(form.affiliationId),
-            date: form.date,
+            dates: datesArray,
             purpose: form.purpose,
             booker_id: Number(currentUserId),
             destination: form.destination,
         };
+
 
         // EDIT MODE
         if (editingId !== null) {
@@ -350,19 +379,37 @@ export default function VehicleBooking() {
             try {
                 const res = await fetch('http://localhost:5000/api/fetch-vehicles');
                 const data = await res.json();
-                const nonDeleted = data.filter(b => !b.deleted); // ← ignore deleted
-                setBookings(nonDeleted);
-                // Extract unique vehicle types and departments, sort alphabetically
-                const uniqueTypes = Array.from(new Set(nonDeleted.map(b => b.vehicleType || b.vehicle_Type).filter(Boolean))).map(toTitleCase).sort((a, b) => a.localeCompare(b));
+
+                const nonDeleted = data.filter(b => !b.deleted); // ignore deleted
+                // Map to add a formatted dates string
+                const bookingsWithDates = nonDeleted.map(b => ({
+                    ...b,
+                    formattedDates: Array.isArray(b.dates) ?
+                        b.dates.map(d => new Date(d).toLocaleDateString()).join(', ')
+                        : new Date(b.dates).toLocaleDateString()
+                }));
+
+                setBookings(bookingsWithDates);
+
+                // Extract unique vehicle types and departments
+                const uniqueTypes = Array.from(
+                    new Set(bookingsWithDates.map(b => b.vehicleType || b.vehicle_Type).filter(Boolean))
+                ).map(toTitleCase).sort((a, b) => a.localeCompare(b));
                 setVehicleTypes(uniqueTypes);
-                const uniqueDepts = Array.from(new Set(nonDeleted.map(b => b.department).filter(Boolean))).map(toTitleCase).sort((a, b) => a.localeCompare(b));
+
+                const uniqueDepts = Array.from(
+                    new Set(bookingsWithDates.map(b => b.department).filter(Boolean))
+                ).map(toTitleCase).sort((a, b) => a.localeCompare(b));
                 setDepartments(uniqueDepts);
+
             } catch (error) {
                 console.error('Error fetching bookings:', error);
             }
         };
+
         fetchBookings();
     }, []);
+
 
     const [editStatusId, setEditStatusId] = useState(null); // Track the booking ID being edited
 
@@ -410,29 +457,60 @@ export default function VehicleBooking() {
     // };
     const handleEdit = (index) => {
         const b = bookings[index];
-
         setEditingId(b.id);
 
-        // Adjust the date by adding 1 day
-        const date = new Date(b.date);
-        date.setDate(date.getDate() + 1); // Increment the day by 1
+        // Default form values
+        let mode = "single";
+        let date = "";
+        let specificDates = ["", "", "", ""];
+        let rangeStart = "";
+        let rangeEnd = "";
 
-        // Format the date as YYYY-MM-DD
-        const adjustedDate = date.toISOString().split('T')[0];
+        if (Array.isArray(b.dates) && b.dates.length > 0) {
+            const dates = b.dates.map(d => new Date(d)).sort((a, b) => a - b);
+
+            if (dates.length === 1) {
+                mode = "single";
+                date = dates[0].toISOString().split("T")[0];
+            } else {
+                // Check if consecutive
+                const isConsecutive = dates.every((d, i) => {
+                    if (i === 0) return true;
+                    const diffDays = (d - dates[i - 1]) / (1000 * 60 * 60 * 24);
+                    return diffDays === 1;
+                });
+
+                if (isConsecutive) {
+                    mode = "range";
+                    rangeStart = dates[0].toISOString().split("T")[0];
+                    rangeEnd = dates[dates.length - 1].toISOString().split("T")[0];
+                } else {
+                    mode = "specific";
+                    // Fill specificDates array (max 4)
+                    specificDates = dates.slice(0, 4).map(d => d.toISOString().split("T")[0]);
+                    while (specificDates.length < 4) specificDates.push("");
+                }
+            }
+        }
 
         setForm({
             vehicleId: b.vehicle_id ? String(b.vehicle_id) : "",
             requestor: b.requestor || "",
             affiliationId: b.department_id ? String(b.department_id) : "",
-            date: b.date ? b.date.slice(0, 10) : "",
+            mode,
+            date,
+            specificDates,
+            rangeStart,
+            rangeEnd,
             purpose: b.purpose || "",
             driverId: b.driver_id ? String(b.driver_id) : "",
             destination: b.destination || "",
         });
 
         setShowForm(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: "smooth" });
     };
+
 
 
 
@@ -553,7 +631,7 @@ export default function VehicleBooking() {
 
                             <div>
                                 <label className="block text-sm font-medium mb-1">Date*</label>
-                                <input
+                                {/* <input
                                     type="date"
                                     min={getTomorrowDate()}
                                     name="date"
@@ -561,7 +639,34 @@ export default function VehicleBooking() {
                                     onChange={handleChange}
                                     className="w-full border rounded-lg px-4 py-2"
                                     required
-                                />
+                                /> */}
+                                {form.mode === "single" && (
+                                    <input type="date" name="date" value={form.date} onChange={handleChange} className="border rounded px-3 py-2 w-full" required />
+                                )}
+
+                                {form.mode === "specific" && form.specificDates.map((d, i) => (
+                                    <input key={i} type="date" value={d} onChange={(e) => {
+                                        const newDates = [...form.specificDates];
+                                        newDates[i] = e.target.value;
+                                        setForm({ ...form, specificDates: newDates });
+                                    }} className="border rounded px-3 py-2 w-full" />
+                                ))}
+
+                                {form.mode === "range" && (
+                                    <div className="flex gap-2">
+                                        <input type="date" name="rangeStart" value={form.rangeStart} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+                                        <input type="date" name="rangeEnd" value={form.rangeEnd} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+                                    </div>
+                                )}
+
+                                <div className="mb-4">
+                                    <label className="block mb-1 font-semibold">Date Mode*</label>
+                                    <select name="mode" value={form.mode} onChange={handleChange} className="border rounded px-3 py-2 w-full">
+                                        <option value="single">Single Date</option>
+                                        <option value="specific">Specific Dates (max 4)</option>
+                                        <option value="range">Date Range (max 1 week)</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div className='flex '>
@@ -818,12 +923,41 @@ export default function VehicleBooking() {
 
                                         {/* Event Date */}
                                         <td className="px-6 py-4">
-                                            {new Date(b.event_date || b.date).toLocaleDateString('en-US', {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: '2-digit'
-                                            })}
+                                            {Array.isArray(b.dates) && b.dates.length > 0
+                                                ? (() => {
+                                                    // Convert to Date objects and sort
+                                                    const dates = b.dates.map(d => new Date(d)).sort((a, b) => a - b);
+
+                                                    // Check if dates are consecutive
+                                                    const isConsecutive = dates.every((d, i) => {
+                                                        if (i === 0) return true;
+                                                        const diffDays = (d - dates[i - 1]) / (1000 * 60 * 60 * 24);
+                                                        return diffDays === 1;
+                                                    });
+
+                                                    // Format month/day
+                                                    const options = { month: 'short', day: 'numeric' };
+                                                    const year = dates[0].getFullYear();
+
+                                                    if (dates.length === 1) {
+                                                        return `${dates[0].toLocaleDateString('en-US', options)}, ${year}`;
+                                                    }
+
+                                                    if (isConsecutive) {
+                                                        // Feb 1–3, 2026
+                                                        return `${dates[0].toLocaleDateString('en-US', options)}–${dates[dates.length - 1].getDate()}, ${year}`;
+                                                    } else {
+                                                        // Feb 1 & 3, 2026
+                                                        const formatted = dates.map(d => d.toLocaleDateString('en-US', options));
+                                                        const last = formatted.pop();
+                                                        return `${formatted.join(' & ')} & ${last}, ${year}`;
+                                                    }
+                                                })()
+                                                : 'No date'}
                                         </td>
+
+
+
 
                                         {/* Purpose */}
                                         <td className="px-6 py-4">{b.purpose}</td>

@@ -9,20 +9,19 @@ const pool = new Pool({
 
 router.get('/', async (req, res) => {
     try {
-        const result = await pool.query(
-            `
-                  SELECT
+        const result = await pool.query(`
+            SELECT
                 vb.*,
-                d.name AS driver_name
+                d.name AS driver_name,
+                vb.dates[1] AS start_date,    -- first date of the array
+                vb.dates[array_length(vb.dates,1)] AS end_date -- last date of array
             FROM "VehicleBooking" vb
             LEFT JOIN "Drivers" d
                 ON d.id = vb.driver_id
-            ORDER BY vb.date DESC
-            `
-            // SELECT * FROM "VehicleBooking" ORDER BY date DESC
-        );
+            ORDER BY vb.dates[1] DESC
+        `);
 
-        console.log("Fetched vehicle rows:", result.rows); // ✅ FIXED
+        console.log("Fetched vehicle rows:", result.rows);
         res.json(result.rows);
 
     } catch (err) {

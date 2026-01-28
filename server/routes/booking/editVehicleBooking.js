@@ -15,7 +15,7 @@ router.put('/:id', async (req, res) => {
         vehicle_id,
         requestor,
         department_id,
-        date,
+        dates, // ← array of dates
         purpose,
         booker_id,
         driver_id = null,
@@ -24,8 +24,9 @@ router.put('/:id', async (req, res) => {
         status = 'pending'
     } = req.body;
 
-    const requiredFields = ["vehicle_id", "requestor", "department_id", "date", "purpose", "booker_id"];
-    const missing = requiredFields.filter(f => !req.body[f]);
+    // Validate required fields
+    const requiredFields = ["vehicle_id", "requestor", "department_id", "dates", "purpose", "booker_id"];
+    const missing = requiredFields.filter(f => !req.body[f] || (Array.isArray(req.body[f]) && req.body[f].length === 0));
 
     if (missing.length > 0) {
         return res.status(400).json({ success: false, message: "Missing fields", missing });
@@ -39,7 +40,7 @@ router.put('/:id', async (req, res) => {
         vehicle_id = $1,
         requestor = $2,
         department_id = $3,
-        date = $4,
+        dates = $4,
         purpose = $5,
         booker_id = $6,
         driver_id = $7,
@@ -50,17 +51,17 @@ router.put('/:id', async (req, res) => {
       RETURNING *
       `,
             [
-                vehicle_id,
+                Number(vehicle_id),
                 requestor,
-                department_id,
-                date,
+                Number(department_id),
+                dates, // ← pass array directly
                 purpose,
-                booker_id,
+                Number(booker_id),
                 driver_id,
                 destination,
-                payment,
+                Number(payment),
                 status,
-                id
+                Number(id)
             ]
         );
 
