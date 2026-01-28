@@ -194,7 +194,7 @@ export default function Drivers() {
 
                     <input
                         name="licenseNumber"
-                        placeholder="License Number"
+                        placeholder="License ID Number"
                         value={form.licenseNumber}
                         onChange={handleChange}
                         className="border px-3 py-2 rounded-lg"

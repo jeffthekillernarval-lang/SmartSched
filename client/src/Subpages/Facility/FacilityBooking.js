@@ -1436,13 +1436,13 @@ export default function Booking() {
                                             </button>
                                         </div>
                                     ))}
-                                    <button
+                                    {/* <button
                                         type="button"
                                         onClick={() => setShowVehicle(true)}
                                         className="bg-[#96161C] text-white px-6 py-2 rounded-lg"
                                     >
                                         Add Vehicle +
-                                    </button>
+                                    </button> */}
 
                                     {showVehicle && (
                                         <div className="mt-4 p-4 border rounded-lg bg-gray-50 relative">

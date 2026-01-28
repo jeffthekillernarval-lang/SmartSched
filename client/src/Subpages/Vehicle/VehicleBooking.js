@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 export default function VehicleBooking() {
     const [conflicts, setConflicts] = useState([]); // ⬅️ store conflicts
@@ -83,17 +84,19 @@ export default function VehicleBooking() {
     }, []);
     const [expandedRow, setExpandedRow] = useState(null);
     const [form, setForm] = useState({
-        vehicleId: '',
-        driverId: '',
-        requestor: '',
-        affiliationId: '',
-        date: '',
-        purpose: ''
+        vehicleId: "",
+        requestor: "",
+        affiliationId: "",
+        date: "",
+        purpose: "",
+        driverId: "",
+        destination: "",
     });
+
+
     useEffect(() => {
         if (!form.vehicleId) {
             setAvailableDrivers([]);
-            setForm(prev => ({ ...prev, driverId: '' }));
             return;
         }
 
@@ -117,67 +120,70 @@ export default function VehicleBooking() {
 
 
     const [editingId, setEditingId] = useState(null);
-    const downloadReceipt = (booking) => {
-        const receiptHtml = `
-  <html>
-    <head>
-      <title>Vehicle Booking Receipt</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 2rem; color: #333; }
-        .header { text-align: center; margin-bottom: 2rem; }
-        .header h1 { color: #96161C; margin: 0; font-size: 28px; }
-        .header h2 { margin: 0; font-size: 20px; font-weight: normal; }
-        .section { border: 1px solid #333; padding: 1rem; margin-bottom: 1rem; border-radius: 6px; }
-        .section h3 { margin: 0 0 0.5rem 0; font-size: 18px; color: #96161C; }
-        .field { margin-bottom: 0.5rem; display: flex; justify-content: space-between; }
-        .field span { display: inline-block; min-width: 150px; font-weight: bold; }
-        .signature { margin-top: 2rem; display: flex; justify-content: space-between; }
-        .signature div { text-align: center; }
-        .signature-line { margin-top: 3rem; border-top: 1px solid #333; width: 200px; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <h1>School Vehicle Booking Receipt</h1>
-        <h2>${new Date().toLocaleDateString()}</h2>
-      </div>
+    const downloadReceipt = async (booking) => {
+        // 1. Create a temporary div to render receipt
+        const receiptDiv = document.createElement("div");
+        receiptDiv.style.width = "800px"; // set width for PDF layout
+        receiptDiv.style.padding = "2rem";
+        receiptDiv.style.backgroundColor = "white";
+        receiptDiv.style.fontFamily = "Arial, sans-serif";
+        receiptDiv.innerHTML = `
+    <h1 style="color:#96161C; text-align:center; margin-bottom:0.2rem;">School Vehicle Booking Receipt</h1>
+    <h2 style="text-align:center; margin-top:0; font-weight:normal; font-size:16px;">
+      ${new Date().toLocaleDateString()}
+    </h2>
 
-      <div class="section">
-        <h3>Booking Details</h3>
-        <div class="field"><span>Vehicle Type:</span> ${toTitleCase(booking.vehicleType || booking.vehicle_Type)}</div>
-        <div class="field"><span>Requestor:</span> ${toTitleCase(booking.requestor)}</div>
-        <div class="field"><span>Department:</span> ${toTitleCase(booking.department)}</div>
-        <div class="field"><span>Date:</span> ${new Date(booking.event_date || booking.date).toLocaleDateString()}</div>
-        <div class="field"><span>Purpose:</span> ${booking.purpose}</div>
-        <div class="field"><span>Destination:</span> ${booking.destination || '________________'}</div>
-        <div class="field"><span>Departure Time:</span> ${booking.departureTime || '____:__'}</div>
-        <div class="field"><span>Arrival Time:</span> ${booking.arrivalTime || '____:__'}</div>
-        <div class="field"><span>No. of Passengers:</span> ${booking.passengers || '___'}</div>
-      </div>
+    <h3 style="color:#96161C; margin-top:2rem; margin-bottom:0.5rem;">Booking Details</h3>
+    <table style="width:100%; border-collapse: collapse;">
+      <tr><th style="border:1px solid #333; padding:8px;">Vehicle Type</th><td style="border:1px solid #333; padding:8px;">${toTitleCase(booking.vehicleType || booking.vehicle_Type)}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Vehicle Plate</th><td style="border:1px solid #333; padding:8px;">${booking.vehicle_plate || '—'}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Requestor</th><td style="border:1px solid #333; padding:8px;">${toTitleCase(booking.requestor)}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Department</th><td style="border:1px solid #333; padding:8px;">${toTitleCase(booking.department)}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Driver</th><td style="border:1px solid #333; padding:8px;">${booking.driver_name || '—'}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Date</th><td style="border:1px solid #333; padding:8px;">${new Date(booking.event_date || booking.date).toLocaleDateString()}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Purpose</th><td style="border:1px solid #333; padding:8px;">${booking.purpose}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Destination</th><td style="border:1px solid #333; padding:8px;">${booking.destination || '—'}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Departure Time</th><td style="border:1px solid #333; padding:8px;">${booking.departureTime || '—'}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Arrival Time</th><td style="border:1px solid #333; padding:8px;">${booking.arrivalTime || '—'}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">No. of Passengers</th><td style="border:1px solid #333; padding:8px;">${booking.passengers || '—'}</td></tr>
+      <tr><th style="border:1px solid #333; padding:8px;">Payment</th><td style="border:1px solid #333; padding:8px;">${booking.payment ? `₱${booking.payment}` : '—'}</td></tr>
+    </table>
 
-      <div class="signature">
-        <div>
-          <p>School President</p>
-          <div class="signature-line"></div>
-        </div>
-        <div>
-          <p>Driver</p>
-          <div class="signature-line"></div>
-        </div>
+    <div style="display:flex; justify-content:space-between; margin-top:3rem;">
+      <div style="text-align:center; width:45%;">
+        <p>School President</p>
+        <div style="border-top:1px solid #333; margin-top:2rem;"></div>
       </div>
-    </body>
-  </html>
+      <div style="text-align:center; width:45%;">
+        <p>Driver</p>
+        <div style="border-top:1px solid #333; margin-top:2rem;"></div>
+      </div>
+    </div>
   `;
 
-        const blob = new Blob([receiptHtml], { type: "text/html" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `VehicleBooking_Receipt_${booking.id || booking.date}.html`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        document.body.appendChild(receiptDiv);
+
+        // 2. Use html2canvas to render as canvas
+        const canvas = await html2canvas(receiptDiv, { scale: 2 });
+        const imgData = canvas.toDataURL("image/png");
+
+        // 3. Generate PDF
+        const pdf = new jsPDF("p", "pt", "a4");
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+
+        // 4. Download PDF
+        pdf.save(`VehicleBooking_Receipt_${booking.id || booking.date}.pdf`);
+
+        // 5. Cleanup temporary div
+        document.body.removeChild(receiptDiv);
     };
+
+    // 
+    // 
+    // 
+    // 
     const [paymentValue, setPaymentValue] = useState(0); // Track the payment value
     const [showPaymentModal, setShowPaymentModal] = useState(false); // Track modal visibility
     const [editingBookingId, setEditingBookingId] = useState(null); // Track the bookingId for editing
@@ -191,20 +197,18 @@ export default function VehicleBooking() {
 
     // Update the payment value
     const updatePayment = async (e) => {
-        e.preventDefault(); // Prevent default form submission behavior
-
+        e.preventDefault();
         try {
             const res = await fetch(`http://localhost:5000/api/edit-payment/${editingBookingId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ payment: paymentValue }) // Pass the payment value from state
+                body: JSON.stringify({ payment: Number(paymentValue) }),
             });
 
             const data = await res.json();
             if (data.success) {
-                alert('Payment updated successfully!');
-                // Optionally update local state to reflect the new payment
-                setShowPaymentModal(false); // Hide modal
+                setBookings(prev => prev.map(b => b.id === editingBookingId ? data.booking : b));
+                setShowPaymentModal(false);
             } else {
                 alert(data.message || 'Failed to update payment');
             }
@@ -215,96 +219,128 @@ export default function VehicleBooking() {
     };
 
 
+
     const handleChange = (e) => {
         setForm({ ...form, [e.target.name]: e.target.value });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        const currentUserId = localStorage.getItem('currentUserId');
+
+        const currentUserId = localStorage.getItem("currentUserId");
 
         const newBooking = {
             vehicle_id: Number(form.vehicleId),
-            driver_id: Number(form.driverId),
+            driver_id: form.driverId ? Number(form.driverId) : null, // ✅ important
             requestor: form.requestor,
             department_id: Number(form.affiliationId),
             date: form.date,
             purpose: form.purpose,
             booker_id: Number(currentUserId),
+            destination: form.destination,
         };
 
+        // EDIT MODE
         if (editingId !== null) {
-            // Edit existing booking
             try {
-                const res = await fetch(`http://localhost:5000/api/edit-vehicle-booking/${editingId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newBooking),
-                });
-
-                const data = await res.json();
-                if (data.success) {
-                    // Update the booking in the state
-                    setBookings(bookings.map(b => b.id === editingId ? { ...b, ...newBooking } : b));
-                    setShowForm(false);
-                    setConflicts([]); // clear conflicts
-                } else {
-                    alert(data.message || 'Failed to update vehicle booking');
-                }
-            } catch (error) {
-                console.error('Error updating booking:', error);
-                alert('Server error, could not update booking.');
-            }
-        } else {
-            // Create new booking (same as before)
-            let hasConflict = false;
-
-            try {
-                // Check for conflicts first
                 const res = await fetch(
-                    `http://localhost:5000/api/vehicle-conflicts?vehicleId=${encodeURIComponent(form.vehicleId)}&date=${encodeURIComponent(form.date)}`
+                    `http://localhost:5000/api/edit-vehicle-booking/${editingId}`,
+                    {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(newBooking),
+                    }
                 );
-                const data = await res.json();
-
-                if (data.success && data.bookings.length > 0) {
-                    hasConflict = true;
-                    setConflicts(data.bookings); // Show conflicts
-                }
-            } catch (err) {
-                console.error('Error checking vehicle conflicts:', err);
-            }
-
-            if (hasConflict) {
-                alert('Conflict detected: This vehicle is already booked on that date.');
-                return;
-            }
-
-            try {
-                const res = await fetch('http://localhost:5000/api/create-vehicle-booking', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(newBooking),
-                });
 
                 const data = await res.json();
+
                 if (data.success) {
-                    setBookings([...bookings, newBooking]);
-                    setForm({
-                        vehicleType: '',
-                        requestor: '',
-                        date: '',
-                        department: '',
-                        purpose: ''
-                    });
+                    // ✅ best: update using returned booking
+                    setBookings((prev) =>
+                        prev.map((b) => (b.id === editingId ? data.booking : b))
+                    );
+
                     setShowForm(false);
-                    setConflicts([]); // clear
+                    setConflicts([]);
+                    setEditingId(null);
+
+                    // optional reset form
+                    setForm({
+                        vehicleId: "",
+                        driverId: "",
+                        requestor: "",
+                        affiliationId: "",
+                        date: "",
+                        purpose: "",
+                        destination: "",
+                    });
                 } else {
-                    alert(data.message || 'Failed to create vehicle booking');
+                    alert(data.message || "Failed to update vehicle booking");
                 }
             } catch (error) {
-                console.error('Error submitting booking:', error);
-                alert('Server error, could not create booking.');
+                console.error("Error updating booking:", error);
+                alert("Server error, could not update booking.");
             }
+
+            return;
+        }
+
+        // CREATE MODE
+        let hasConflict = false;
+
+        try {
+            const res = await fetch(
+                `http://localhost:5000/api/vehicle-conflicts?vehicleId=${encodeURIComponent(
+                    form.vehicleId
+                )}&date=${encodeURIComponent(form.date)}`
+            );
+
+            const data = await res.json();
+
+            if (data.success && data.bookings.length > 0) {
+                hasConflict = true;
+                setConflicts(data.bookings);
+            }
+        } catch (err) {
+            console.error("Error checking vehicle conflicts:", err);
+        }
+
+        if (hasConflict) {
+            alert("Conflict detected: This vehicle is already booked on that date.");
+            return;
+        }
+
+        try {
+            const res = await fetch("http://localhost:5000/api/create-vehicle-booking", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newBooking),
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                // ✅ append returned booking (contains id)
+                setBookings((prev) => [...prev, data.booking]);
+
+                setForm({
+                    vehicleId: "",
+                    driverId: "",
+                    requestor: "",
+                    affiliationId: "",
+                    date: "",
+                    purpose: "",
+                    destination: "",
+                });
+
+                setShowForm(false);
+                setConflicts([]);
+            } else {
+                alert(data.message || "Failed to create vehicle booking");
+            }
+        } catch (error) {
+            console.error("Error submitting booking:", error);
+            alert("Server error, could not create booking.");
         }
     };
 
@@ -385,11 +421,13 @@ export default function VehicleBooking() {
         const adjustedDate = date.toISOString().split('T')[0];
 
         setForm({
-            vehicleId: b.vehicle_id || '',       // ID
-            requestor: b.requestor || '',
-            affiliationId: b.department_id || '', // ID
-            date: adjustedDate,                  // Adjusted date (incremented by 1 day)
-            purpose: b.purpose || ''
+            vehicleId: b.vehicle_id ? String(b.vehicle_id) : "",
+            requestor: b.requestor || "",
+            affiliationId: b.department_id ? String(b.department_id) : "",
+            date: b.date ? b.date.slice(0, 10) : "",
+            purpose: b.purpose || "",
+            driverId: b.driver_id ? String(b.driver_id) : "",
+            destination: b.destination || "",
         });
 
         setShowForm(true);
@@ -526,16 +564,29 @@ export default function VehicleBooking() {
                                 />
                             </div>
                         </div>
-                        <div className="mb-6">
-                            <label className="block text-sm font-medium mb-1">Purpose*</label>
-                            <textarea
-                                name="purpose"
-                                value={form.purpose}
-                                placeholder='Community Outreach program'
-                                onChange={handleChange}
-                                className="w-full border rounded-lg px-4 py-2"
-                                required
-                            />
+                        <div className='flex '>
+                            <div className="mb-6 w-full mr-5">
+                                <label className="block text-sm font-medium mb-1">Purpose*</label>
+                                <textarea
+                                    name="purpose"
+                                    value={form.purpose}
+                                    placeholder='Community Outreach program'
+                                    onChange={handleChange}
+                                    className="w-full border rounded-lg px-4 py-2"
+                                    required
+                                />
+                            </div>
+                            <div className="mb-6 w-full ml-5">
+                                <label className="block text-sm font-medium mb-1">Desination*</label>
+                                <textarea
+                                    name="destination"
+                                    value={form.destination}
+                                    placeholder={'Milala National Highschool, Bataan wew \n Create a list for multiple destinations'}
+                                    onChange={handleChange}
+                                    className="w-full border rounded-lg px-4 py-2"
+                                    required
+                                />
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-1">Driver*</label>
@@ -709,6 +760,8 @@ export default function VehicleBooking() {
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Department</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Date</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Purpose</th>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Destination</th>
+                            <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Driver</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Status</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase">Payment</th>
                             <th className="px-6 py-3 text-left text-xs font-bold text-white uppercase rounded-tr-xl">Actions</th>
@@ -774,6 +827,8 @@ export default function VehicleBooking() {
 
                                         {/* Purpose */}
                                         <td className="px-6 py-4">{b.purpose}</td>
+                                        <td className="px-6 py-4">{b.destination}</td>
+                                        <td className="px-6 py-4">{b.driver_name || '—'}</td>
                                         <td className="px-6 py-4 " onClick={(e) => e.stopPropagation()}>
                                             {editStatusId === b.id ? (
                                                 <select
@@ -807,7 +862,9 @@ export default function VehicleBooking() {
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-4">{b.payment}</td>
+                                        <td>{b.payment}</td>
+
+
 
                                         {/* Admin or User-specific Actions */}
                                         {isAdmin ? (
@@ -826,30 +883,53 @@ export default function VehicleBooking() {
                                                         Delete
                                                     </button>
                                                     <button onClick={() => openPaymentModal(b.id, b.payment)} className="px-4 py-1 text-sm font-semibold rounded-full border border-blue-600 text-blue-600">
-                                                        Edit Payment
+                                                        Payment
                                                     </button>
                                                 </td>
 
                                                 {/* Payment Edit Modal */}
                                                 {showPaymentModal && (
-                                                    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex justify-center items-center z-50">
-                                                        <div className="bg-white p-6 rounded-lg shadow-lg w-96">
-                                                            <h3 className="text-xl font-semibold mb-4">Edit Payment</h3>
-                                                            <form onSubmit={updatePayment}>
-                                                                <label className="block text-sm font-medium mb-1">Payment Amount*</label>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    value={paymentValue}
-                                                                    onChange={(e) => setPaymentValue(e.target.value)}
-                                                                    className="w-full border rounded-lg px-4 py-2 mb-4"
-                                                                    required
-                                                                />
-                                                                <div className="flex gap-3 justify-end">
-                                                                    <button type="submit" className="bg-[#96161C] text-white px-8 py-2 rounded-lg">
+                                                    <div className="fixed inset-0 z-50 flex items-center justify-center"
+                                                        style={{ backgroundColor: 'rgba(128, 128, 128, 0.3)' }}>
+                                                        {/* Modal box */}
+                                                        <div className="bg-white rounded-lg shadow-lg w-80 max-w-full p-6 relative space-y-4">
+                                                            <h3 className="text-xl font-semibold">Edit Payment</h3>
+
+                                                            {/* Explanation / Guide */}
+                                                            <div className="bg-gray-100 p-3 rounded border border-gray-200 text-sm text-gray-700">
+                                                                <p><strong>Payment Calculation Guide:</strong></p>
+                                                                <p>- Standard rate: <span className="font-semibold">₱10 / km</span></p>
+                                                                <p>- Example: 50 km → 50 x 10 = ₱500</p>
+                                                                <p>- Additional charges may apply for extra hours or tolls.</p>
+                                                            </div>
+
+                                                            {/* Payment Input */}
+                                                            <form onSubmit={updatePayment} className="space-y-3">
+                                                                <div>
+                                                                    <label className="block text-sm font-medium mb-1">Payment Amount*</label>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        value={paymentValue}
+                                                                        onChange={(e) => setPaymentValue(e.target.value)}
+                                                                        className="w-full border rounded-lg px-4 py-2"
+                                                                        required
+                                                                    />
+                                                                </div>
+
+                                                                {/* Buttons */}
+                                                                <div className="flex justify-end gap-3">
+                                                                    <button
+                                                                        type="submit"
+                                                                        className="bg-[#96161C] text-white px-6 py-2 rounded-lg"
+                                                                    >
                                                                         Save
                                                                     </button>
-                                                                    <button type="button" onClick={() => setShowPaymentModal(false)} className="bg-gray-200 px-8 py-2 rounded-lg">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setShowPaymentModal(false)}
+                                                                        className="bg-gray-200 px-6 py-2 rounded-lg"
+                                                                    >
                                                                         Cancel
                                                                     </button>
                                                                 </div>
@@ -857,6 +937,7 @@ export default function VehicleBooking() {
                                                         </div>
                                                     </div>
                                                 )}
+
                                             </>
                                         ) : (
                                             parseInt(b.booker_id) === parseInt(currentUserId) ? (
@@ -917,7 +998,7 @@ export default function VehicleBooking() {
                     </tbody>
 
                 </table>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

@@ -20,18 +20,18 @@ const loginRoute = require('./routes/account/login');
 app.use('/api/login', loginRoute);
 // 
 // Global request logger
-app.use((req, res, next) => {
-    console.log("---- Incoming Request ----");
-    console.log("Method:", req.method);
-    console.log("URL:", req.originalUrl);
-    console.log("Headers:", req.headers);
-    console.log("Body:", req.body);
-    console.log("--------------------------");
-    next();
-});
+// app.use((req, res, next) => {
+//     console.log("---- Incoming Request ----");
+//     console.log("Method:", req.method);
+//     console.log("URL:", req.originalUrl);
+//     console.log("Headers:", req.headers);
+//     console.log("Body:", req.body);
+//     console.log("--------------------------");
+//     next();
+// });
 
 app.use((req, res, next) => {
-    console.log(`[REQ] ${req.method} ${req.originalUrl}`);
+    // console.log(`[REQ] ${req.method} ${req.originalUrl}`);
     next();
 });
 app.get('/api/test', async (req, res) => {
@@ -130,6 +130,8 @@ const updateVehiclePayment = require('./routes/booking/updateVehiclePayment');
 app.use('/api/edit-payment', updateVehiclePayment);
 
 app.use('/api/vehicle-conflicts', require('./routes/booking/vehicleConflicts'));
+const editPaymentRoute = require('./routes/booking/editPayment');
+app.use('/api/edit-payment', editPaymentRoute);
 
 
 // CRUDS

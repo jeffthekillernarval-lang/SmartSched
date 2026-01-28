@@ -10,7 +10,16 @@ const pool = new Pool({
 router.get('/', async (req, res) => {
     try {
         const result = await pool.query(
-            `SELECT * FROM "VehicleBooking" ORDER BY date DESC`
+            `
+                  SELECT
+                vb.*,
+                d.name AS driver_name
+            FROM "VehicleBooking" vb
+            LEFT JOIN "Drivers" d
+                ON d.id = vb.driver_id
+            ORDER BY vb.date DESC
+            `
+            // SELECT * FROM "VehicleBooking" ORDER BY date DESC
         );
 
         console.log("Fetched vehicle rows:", result.rows); // ✅ FIXED
