@@ -6,7 +6,7 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
 
-router.get('/related-vehicle-bookings', async (req, res) => {
+router.get('/', async (req, res) => {
     const { date, purpose, requestor } = req.query;
 
     if (!date || !purpose || !requestor) {
@@ -19,7 +19,7 @@ router.get('/related-vehicle-bookings', async (req, res) => {
     try {
         const result = await pool.query(
             `SELECT *
-             FROM "VehicleBookings"
+             FROM "vehiclebookings"
              WHERE date = $1
                AND purpose = $2
                AND requestor = $3`,

@@ -61,7 +61,7 @@ function Login() {
                         <div className="space-y-6">
                             <input
                                 type="text"
-                                placeholder="Email"
+                                placeholder="Username"
                                 value={email}
                                 onChange={e => setEmail(e.target.value)}
                                 className="w-full text-sm px-4 py-3 bg-gray-200 focus:bg-gray-100 border border-gray-200 rounded-lg"

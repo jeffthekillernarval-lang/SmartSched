@@ -1273,6 +1273,7 @@ export default function Booking() {
                                     <input
                                         type="text"
                                         name="title"
+                                        maxLength={18}
                                         value={form.title}
                                         onChange={handleChange}
                                         placeholder="General Assembly"
@@ -1315,6 +1316,7 @@ export default function Booking() {
                                     <input
                                         type="text"
                                         name="requestedBy"
+                                        maxLength={18}
                                         value={form.requestedBy}
                                         onChange={handleChange}
                                         placeholder="Juan De la Cruz"

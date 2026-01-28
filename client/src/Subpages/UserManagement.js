@@ -3,6 +3,7 @@ import { UserPlus, Trash, Edit, ShieldCheck, Users } from 'lucide-react';
 
 export default function UserManagement() {
     const [users, setUsers] = useState([]);
+    const [affiliations, setAffiliations] = useState([]); // 🟢 store affiliations
     const [form, setForm] = useState({
         name: '',
         affiliation: '',
@@ -12,6 +13,7 @@ export default function UserManagement() {
     });
     const [editingId, setEditingId] = useState(null);
 
+    // Fetch users
     const fetchUsers = async () => {
         try {
             const res = await fetch('http://localhost:5000/api/fetchAll-user');
@@ -22,9 +24,27 @@ export default function UserManagement() {
         }
     };
 
+    useEffect(() => {
+        const fetchAffiliations = async () => {
+            try {
+                const res = await fetch('http://localhost:5000/api/fetch-affiliation');
+                const data = await res.json();
+                if (data.success) {
+                    setAffiliations(data.affiliations); // array of {id, abbreviation, meaning, moderator}
+                    console.log("THIS FCKING DATA", JSON.stringify(data, null, 2));
+                }
+            } catch (err) {
+                console.error('Error fetching affiliations:', err);
+            }
+        };
+
+        fetchAffiliations();
+    }, []);
+
 
     useEffect(() => {
         fetchUsers();
+        // fetchAffiliations(); // 🟢 fetch affiliations on mount
     }, []);
 
     const handleChange = (e) => {
@@ -57,13 +77,14 @@ export default function UserManagement() {
     const handleEdit = (user) => {
         setForm({
             name: user.name,
-            affiliation: user.affiliation,
-            role: user.role,
             email: user.email,
-            password: '' // password won't be shown
+            role: user.role,
+            password: '',
+            affiliation: user.affiliation, // keep it as is
         });
         setEditingId(user.id);
     };
+
 
     const handleDelete = async (id) => {
         if (!window.confirm('Delete this user?')) return;
@@ -88,15 +109,58 @@ export default function UserManagement() {
 
             <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 mb-8 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input name="name" placeholder="Full Name" value={form.name} onChange={handleChange} className="border px-3 py-2 rounded-lg" required />
-                    <input name="email" placeholder="Email" value={form.email} onChange={handleChange} className="border px-3 py-2 rounded-lg" required />
-                    <input name="affiliation" placeholder="Affiliation" value={form.affiliation} onChange={handleChange} className="border px-3 py-2 rounded-lg" />
-                    <select name="role" value={form.role} onChange={handleChange} className="border px-3 py-2 rounded-lg">
+                    <input
+                        name="name"
+                        placeholder="Full Name"
+                        value={form.name}
+                        onChange={handleChange}
+                        className="border px-3 py-2 rounded-lg"
+                        required
+                    />
+                    <input
+                        name="email"
+                        placeholder="Username"
+                        value={form.email}
+                        onChange={handleChange}
+                        className="border px-3 py-2 rounded-lg"
+                        required
+                    />
+                    {/* <label className="block text-sm font-medium mb-1">Affiliation*</label> */}
+                    {/* Affiliation / Department */}
+                    <select
+                        name="affiliationId"
+                        value={form.affiliationId}
+                        onChange={handleChange}
+                        className="w-full border rounded-lg px-4 py-2"
+                        required
+                    >
+                        <option value="">Select...</option>
+                        {affiliations.map(a => (
+                            <option key={a.id} value={a.id}>
+                                {a.abbreviation} - {a.meaning}
+                            </option>
+                        ))}
+                    </select>
+
+                    <select
+                        name="role"
+                        value={form.role}
+                        onChange={handleChange}
+                        className="border px-3 py-2 rounded-lg"
+                    >
                         <option value="user">User</option>
                         <option value="admin">Admin</option>
                         <option value="owner">Owner</option>
                     </select>
-                    <input name="password" type="password" placeholder="Password" value={form.password} onChange={handleChange} className="border px-3 py-2 rounded-lg" required={!editingId} />
+                    <input
+                        name="password"
+                        type="password"
+                        placeholder="Password"
+                        value={form.password}
+                        onChange={handleChange}
+                        className="border px-3 py-2 rounded-lg"
+                        required={!editingId}
+                    />
                 </div>
 
                 <div className="flex justify-end gap-3">
@@ -136,7 +200,11 @@ export default function UserManagement() {
                             <tr key={user.id} className="border-b">
                                 <td className="px-4 py-2">{user.name}</td>
                                 <td className="px-4 py-2">{user.email}</td>
-                                <td className="px-4 py-2">{user.affiliation}</td>
+                                <td className="px-4 py-2">
+                                    {affiliations.find(a => a.id === Number(user.affiliation))
+                                        ? `${affiliations.find(a => a.id === Number(user.affiliation)).abbreviation} - ${affiliations.find(a => a.id === Number(user.affiliation)).meaning}`
+                                        : '—'}
+                                </td>
                                 <td className="px-4 py-2">{user.role}</td>
                                 <td className="px-4 py-2 flex justify-end gap-3">
                                     <button onClick={() => handleEdit(user)} className="text-blue-600 hover:underline flex items-center gap-1">

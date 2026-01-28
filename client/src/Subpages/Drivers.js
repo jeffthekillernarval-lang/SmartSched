@@ -186,6 +186,7 @@ export default function Drivers() {
                     <input
                         name="contactNumber"
                         placeholder="Contact Number"
+                        maxLength={11}
                         value={form.contactNumber}
                         onChange={handleChange}
                         className="border px-3 py-2 rounded-lg"

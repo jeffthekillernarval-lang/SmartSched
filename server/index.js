@@ -194,8 +194,8 @@ app.use('/api/delete-driver', deleteDriverRoute);
 const fetchDriversByVehicle = require('./routes/booking/fetch-drivers-by-vehicle');
 app.use('/api/drivers-by-vehicle', fetchDriversByVehicle);
 
-
-
+const relatedVehicleBookings = require('./routes/cruds/fetchRelatedVehicleBookings')
+app.use('/api/related-vehicle-bookings', relatedVehicleBookings);
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });
