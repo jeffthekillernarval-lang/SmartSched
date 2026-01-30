@@ -22,7 +22,11 @@ import Equipments from '../Subpages/Equipments';
 import FacilityDashboard from '../Subpages/FacilityDashboard';
 import VehicleDashboard from '../Subpages/VehicleDashboard';
 import Drivers from '../Subpages/Drivers';
-
+// Equipment
+import EquipmentBooking from '../Subpages/Equipment/EquipmentBooking';
+import EquipmentCalendar from '../Subpages/Equipment/EquipmentCalendar';
+import EquipmentDashboard from '../Subpages/EquipmentDashboard';
+import UniversalCalendar from '../Subpages/UniversalCalendar';
 // ✅ Updated helper — now handles both facility & vehicle bookings
 async function sendCohereChatMessage(message, bookingsPayload = {}, currentDateTime) {
     try {
@@ -52,13 +56,36 @@ export default function LandingPage() {
         { from: 'bot', text: 'Hi! How can I help you today?, `\n`Would u like to book a Facility or Vehicle for an event?' }
     ]);
     const [isManagementOpen, setIsManagementOpen] = useState(true);
+    const [isEquipmentOpen, setisEquipmentOpen] = useState(true);
 
-
+    const [allowedSidebarItems, setAllowedSidebarItems] = useState([]);
     const [bookings, setBookings] = useState([]);
     const [vehicleBookings, setVehicleBookings] = useState([]);
     const [user, setUser] = useState(null);
+    const canSee = (key) => {
+        // Admins see everything
+        if (user?.role === "SuperAdmin") return true;
+
+        // If no sidebar permissions loaded yet, hide by default
+        if (!allowedSidebarItems || allowedSidebarItems.length === 0) return false;
+
+        return allowedSidebarItems.includes(key);
+    };
 
     const toggleChatBot = () => setShowChatbot(!showChatbot);
+    useEffect(() => {
+        const userId = Number(localStorage.getItem('currentUserId'));
+        if (!userId) return;
+
+        fetch(`http://localhost:5000/api/user-sidebar-fetch/${userId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setAllowedSidebarItems(data.items);
+                }
+            })
+            .catch(err => console.error('Sidebar permission fetch error:', err));
+    }, []);
 
     // ===== Chat send handler =====
     const handleSendChat = async () => {
@@ -188,6 +215,10 @@ export default function LandingPage() {
         case 'facility-dashboard': RenderedPage = < FacilityDashboard />; break;
         case 'vehicle-dashboard': RenderedPage = <VehicleDashboard />; break;
         case 'manage-drivers': RenderedPage = <Drivers />; break;
+        case 'equipment-calendar': RenderedPage = <EquipmentCalendar />; break;
+        case 'equipment-booking': RenderedPage = <EquipmentBooking />; break;
+        case 'equipment-dashboard': RenderedPage = <EquipmentDashboard />; break;
+        case 'universal-calendar': RenderedPage = <UniversalCalendar />; break;
         default: RenderedPage = <Dashboard />;
     }
 
@@ -227,15 +258,27 @@ export default function LandingPage() {
                     {/* {showFacilityBreakdown && (
                         <SidebarItem icon={<Home size={20} />} label="Dashboard" open={isSidebarOpen} onClick={() => handleSetActivePage('dashboard')} />
                     )} */}
-                    {showFacilityBreakdown && (
+                    {canSee('facility-dashboard') && showFacilityBreakdown && (
                         <SidebarItem icon={<Home size={20} />} label="Facility Dashboard" open={isSidebarOpen} onClick={() => handleSetActivePage('facility-dashboard')} />
                     )}
-                    {showFacilityBreakdown && (
+
+                    {canSee('vehicle-dashboard') && showFacilityBreakdown && (
                         <SidebarItem icon={<Home size={20} />} label="Vehicle Dashboard" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-dashboard')} />
                     )}
-                    <SidebarItem icon={<User size={20} />} label="Profile" open={isSidebarOpen} onClick={() => handleSetActivePage('profile')} />
+
+                    {canSee('equipment-dashboard') && showFacilityBreakdown && (
+                        <SidebarItem icon={<Home size={20} />} label="Equipment Dashboard" open={isSidebarOpen} onClick={() => handleSetActivePage('equipment-dashboard')} />
+                    )}
+
+                    {canSee('universal-calendar') && showFacilityBreakdown && (
+                        <SidebarItem icon={<Home size={20} />} label="Universal Calendar" open={isSidebarOpen} onClick={() => handleSetActivePage('universal-calendar')} />
+                    )}
+
+                    {canSee('profile') && (
+                        <SidebarItem icon={<User size={20} />} label="Profile" open={isSidebarOpen} onClick={() => handleSetActivePage('profile')} />
+                    )}
                     {/* Management Section (group label only, collapsible) */}
-                    {isSidebarOpen && user?.role === 'admin' && (
+                    {user?.role === 'admin' && isSidebarOpen && (
                         <>
                             <button
                                 onClick={() => setIsManagementOpen(!isManagementOpen)}
@@ -246,54 +289,23 @@ export default function LandingPage() {
 
                             {isManagementOpen && (
                                 <>
-                                    {/* Keep each item separate so you can change them later */}
-                                    {user?.role === 'admin' && (
-                                        <SidebarItem
-                                            icon={<UserCog size={20} />}
-                                            label="User Management"
-                                            open={isSidebarOpen}
-                                            onClick={() => handleSetActivePage('user-management')}
-                                        />
+                                    {canSee('user-management') && (
+                                        <SidebarItem icon={<UserCog size={20} />} label="User Management" open={isSidebarOpen} onClick={() => handleSetActivePage('user-management')} />
                                     )}
-                                    {user?.role === 'admin' && (
-                                        <SidebarItem
-                                            icon={<ScrollText size={20} />}
-                                            label="Affiliations"
-                                            open={isSidebarOpen}
-                                            onClick={() => handleSetActivePage('manage-affiliation')}
-                                        />
+                                    {canSee('manage-affiliation') && (
+                                        <SidebarItem icon={<ScrollText size={20} />} label="Affiliations" open={isSidebarOpen} onClick={() => handleSetActivePage('manage-affiliation')} />
                                     )}
-                                    {user?.role === 'admin' && (
-                                        <SidebarItem
-                                            icon={<Hotel size={20} />}
-                                            label="Facilities"
-                                            open={isSidebarOpen}
-                                            onClick={() => handleSetActivePage('manage-department')}
-                                        />
+                                    {canSee('manage-department') && (
+                                        <SidebarItem icon={<Hotel size={20} />} label="Facilities" open={isSidebarOpen} onClick={() => handleSetActivePage('manage-department')} />
                                     )}
-                                    {user?.role === 'admin' && (
-                                        <SidebarItem
-                                            icon={<Speaker size={20} />}
-                                            label="Equipments"
-                                            open={isSidebarOpen}
-                                            onClick={() => handleSetActivePage('manage-allequipment')}
-                                        />
+                                    {canSee('manage-vehicles') && (
+                                        <SidebarItem icon={<Car size={20} />} label="Vehicles" open={isSidebarOpen} onClick={() => handleSetActivePage('manage-vehicles')} />
                                     )}
-                                    {user?.role === 'admin' && (
-                                        <SidebarItem
-                                            icon={<Car size={20} />}
-                                            label="Vehicles"
-                                            open={isSidebarOpen}
-                                            onClick={() => handleSetActivePage('manage-vehicles')}
-                                        />
+                                    {canSee('manage-allequipment') && (
+                                        <SidebarItem icon={<Speaker size={20} />} label="Equipments" open={isSidebarOpen} onClick={() => handleSetActivePage('manage-allequipment')} />
                                     )}
-                                    {user?.role === 'admin' && (
-                                        <SidebarItem
-                                            icon={<LifeBuoy size={20} />}
-                                            label="Drivers"
-                                            open={isSidebarOpen}
-                                            onClick={() => handleSetActivePage('manage-drivers')}
-                                        />
+                                    {canSee('manage-drivers') && (
+                                        <SidebarItem icon={<LifeBuoy size={20} />} label="Drivers" open={isSidebarOpen} onClick={() => handleSetActivePage('manage-drivers')} />
                                     )}
                                 </>
                             )}
@@ -301,40 +313,82 @@ export default function LandingPage() {
                     )}
 
 
+                    <button
+                        onClick={() => setisEquipmentOpen(!isEquipmentOpen)}
+                        className="px-2 pt-4 text-xs font-bold text-[#ffa7a7] uppercase tracking-wider text-left w-full"
+                    >
+                        Equipment Bookings {isEquipmentOpen ? '▾' : '▸'}
+                    </button>
+                    {canSee('equipment-calendar') || canSee('equipment-booking') ? (
+                        <>
+                            <button
+                                onClick={() => setisEquipmentOpen(!isEquipmentOpen)}
+                                className="px-2 pt-4 text-xs font-bold text-[#ffa7a7] uppercase tracking-wider text-left w-full"
+                            >
+                                Equipment Bookings {isEquipmentOpen ? '▾' : '▸'}
+                            </button>
+
+                            {isEquipmentOpen && (
+                                <>
+                                    {canSee('equipment-calendar') && (
+                                        <SidebarItem icon={<UserCog size={20} />} label="Equipment Calendar" open={isSidebarOpen} onClick={() => handleSetActivePage('equipment-calendar')} />
+                                    )}
+                                    {canSee('equipment-booking') && (
+                                        <SidebarItem icon={<ScrollText size={20} />} label="Equipment Booking" open={isSidebarOpen} onClick={() => handleSetActivePage('equipment-booking')} />
+                                    )}
+                                </>
+                            )}
+                        </>
+                    ) : null}
 
 
                     {/* Facility Section */}
-                    {isSidebarOpen && (
+                    {canSee('calendar') || canSee('booking') ? (
                         <>
-                            <button onClick={() => setIsFacilityOpen(!isFacilityOpen)} className="px-2 pt-4 text-xs font-bold text-[#ffa7a7] uppercase tracking-wider text-left w-full">
+                            <button
+                                onClick={() => setIsFacilityOpen(!isFacilityOpen)}
+                                className="px-2 pt-4 text-xs font-bold text-[#ffa7a7] uppercase tracking-wider text-left w-full"
+                            >
                                 Facility Bookings {isFacilityOpen ? '▾' : '▸'}
                             </button>
+
                             {isFacilityOpen && (
                                 <>
-                                    <SidebarItem icon={<Calendar size={20} />} label="Facility Calendar" open={isSidebarOpen} onClick={() => handleSetActivePage('calendar')} />
-                                    <SidebarItem icon={<ClipboardList size={20} />} label="Facility Bookings" open={isSidebarOpen} onClick={() => handleSetActivePage('booking')} />
-                                    {user?.role === 'admin' && (
-                                        <SidebarItem icon={<Calendar size={20} />} label="Manage Equipment" open={isSidebarOpen} onClick={() => handleSetActivePage('manage-equipment')} />
+                                    {canSee('calendar') && (
+                                        <SidebarItem icon={<Calendar size={20} />} label="Facility Calendar" open={isSidebarOpen} onClick={() => handleSetActivePage('calendar')} />
+                                    )}
+                                    {canSee('booking') && (
+                                        <SidebarItem icon={<ClipboardList size={20} />} label="Facility Bookings" open={isSidebarOpen} onClick={() => handleSetActivePage('booking')} />
                                     )}
                                 </>
                             )}
                         </>
-                    )}
+                    ) : null}
+
 
                     {/* Vehicle Section */}
-                    {isSidebarOpen && (
+                    {canSee('vehicle-calendar') || canSee('vehicle-booking') ? (
                         <>
-                            <button onClick={() => setIsVehicleOpen(!isVehicleOpen)} className="px-2 pt-4 text-xs font-bold text-[#ffa7a7] uppercase tracking-wider text-left w-full">
+                            <button
+                                onClick={() => setIsVehicleOpen(!isVehicleOpen)}
+                                className="px-2 pt-4 text-xs font-bold text-[#ffa7a7] uppercase tracking-wider text-left w-full"
+                            >
                                 Vehicle Bookings {isVehicleOpen ? '▾' : '▸'}
                             </button>
+
                             {isVehicleOpen && (
                                 <>
-                                    <SidebarItem icon={<Calendar size={20} />} label="Vehicle Calendar" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-calendar')} />
-                                    <SidebarItem icon={<ClipboardList size={20} />} label="Vehicle Bookings" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-booking')} />
+                                    {canSee('vehicle-calendar') && (
+                                        <SidebarItem icon={<Calendar size={20} />} label="Vehicle Calendar" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-calendar')} />
+                                    )}
+                                    {canSee('vehicle-booking') && (
+                                        <SidebarItem icon={<ClipboardList size={20} />} label="Vehicle Bookings" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-booking')} />
+                                    )}
                                 </>
                             )}
                         </>
-                    )}
+                    ) : null}
+
 
                     <SidebarItem icon={<LogOut size={20} />} label="Logout" open={isSidebarOpen} onClick={handleLogout} />
                 </nav>

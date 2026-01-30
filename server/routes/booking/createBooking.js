@@ -32,14 +32,47 @@ router.post('/', async (req, res) => {
         await client.query('BEGIN');
 
         const insertedIds = [];
+        const facilityId = Number(event_facility);
 
         for (const s of schedules) {
             if (!s.date || s.date.trim() === '') {
                 throw new Error('Invalid or missing date in schedule.');
             }
 
-            console.log('Debug: Schedule date:', s.date); // Debug log to check the date value
+            /* ===============================
+               🚨 CONFLICT CHECK (SERVER-SIDE)
+            ================================ */
+            const conflictCheck = await client.query(
+                `
+                SELECT 1
+                FROM "Booking"
+                WHERE event_facility = $1
+                  AND event_date = $2
+                  AND deleted = false
+                  AND status IN ('Pending', 'Approved')
+                  AND (
+                        $3 < ending_time
+                    AND $4 > starting_time
+                  )
+                LIMIT 1
+                `,
+                [
+                    facilityId,
+                    s.date,
+                    s.startTime,
+                    s.endTime
+                ]
+            );
 
+            if (conflictCheck.rowCount > 0) {
+                throw new Error(
+                    `Conflict detected for facility ${facilityId} on ${s.date} from ${s.startTime} to ${s.endTime}`
+                );
+            }
+
+            /* ===============================
+               ✅ INSERT (SAFE)
+            ================================ */
             const result = await client.query(
                 `
                 INSERT INTO "Booking" (
@@ -58,20 +91,16 @@ router.post('/', async (req, res) => {
                     booking_fee
                 )
                 VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9,
-                    'pending',
-                    $10,
-                    $11,
-                    0
+                    $1,$2,$3,$4,$5,$6,$7,$8,$9,'Pending',$10,$11,0
                 )
                 RETURNING id
                 `,
                 [
-                    s.date, // Ensure this is in the correct format (YYYY-MM-DD)
+                    s.date,
                     s.startTime,
                     s.endTime,
                     event_name,
-                    event_facility,
+                    facilityId,
                     requested_by,
                     organization,
                     contact,
@@ -85,27 +114,20 @@ router.post('/', async (req, res) => {
         }
 
         await client.query('COMMIT');
+
         res.json({
             success: true,
             bookings: insertedIds,
             message: `${insertedIds.length} bookings created`
         });
-        // res.json({
-        //     success: true,
-        //     ids: insertedIds,
-        //     message: `${insertedIds.length} bookings created`,
-        //     booking: {
-        //         bookings: insertedIds
-        //     }
-
-        // });
 
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Create booking error:', err);
-        res.status(500).json({
+
+        res.status(409).json({
             success: false,
-            message: 'Server error'
+            message: err.message
         });
     } finally {
         client.release();

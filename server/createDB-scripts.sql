@@ -16,8 +16,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Actions"
     OWNER to postgres;
-
-    -- Table: public.Affiliations
+-- Table: public.Affiliations
 
 -- DROP TABLE IF EXISTS public."Affiliations";
 
@@ -35,7 +34,8 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Affiliations"
     OWNER to postgres;
-    -- Table: public.Booking
+
+-- Table: public.Booking
 
 -- DROP TABLE IF EXISTS public."Booking";
 
@@ -64,17 +64,70 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Booking"
     OWNER to postgres;
-    -- Table: public.Equipment
+-- Table: public.DriverVehicles
+
+-- DROP TABLE IF EXISTS public."DriverVehicles";
+
+CREATE TABLE IF NOT EXISTS public."DriverVehicles"
+(
+    id integer NOT NULL DEFAULT nextval('"DriverVehicles_id_seq"'::regclass),
+    driver_id integer,
+    vehicle_id integer,
+    enabled boolean DEFAULT true,
+    CONSTRAINT "DriverVehicles_pkey" PRIMARY KEY (id),
+    CONSTRAINT "DriverVehicles_driver_id_vehicle_id_key" UNIQUE (driver_id, vehicle_id),
+    CONSTRAINT "DriverVehicles_driver_id_fkey" FOREIGN KEY (driver_id)
+        REFERENCES public."Drivers" (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE,
+    CONSTRAINT "DriverVehicles_vehicle_id_fkey" FOREIGN KEY (vehicle_id)
+        REFERENCES public."Vehicles" (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."DriverVehicles"
+    OWNER to postgres;
+
+-- Table: public.Drivers
+
+-- DROP TABLE IF EXISTS public."Drivers";
+
+CREATE TABLE IF NOT EXISTS public."Drivers"
+(
+    id integer NOT NULL DEFAULT nextval('"Drivers_id_seq"'::regclass),
+    name text COLLATE pg_catalog."default" NOT NULL,
+    age integer,
+    gender text COLLATE pg_catalog."default",
+    contact_number text COLLATE pg_catalog."default",
+    enabled boolean DEFAULT true,
+    liscence_id_number text COLLATE pg_catalog."default",
+    CONSTRAINT "Drivers_pkey" PRIMARY KEY (id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."Drivers"
+    OWNER to postgres;
+-- Table: public.Equipment
 
 -- DROP TABLE IF EXISTS public."Equipment";
 
 CREATE TABLE IF NOT EXISTS public."Equipment"
 (
     id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
-    type character varying COLLATE pg_catalog."default",
-    quantity integer,
-    booking_id integer,
-    model_id character varying COLLATE pg_catalog."default",
+    equipment_type_id integer NOT NULL,
+    quantity integer NOT NULL,
+    affiliation_id integer NOT NULL,
+    facility_id integer NOT NULL,
+    dates date[] NOT NULL,
+    purpose text COLLATE pg_catalog."default" NOT NULL,
+    created_at timestamp without time zone DEFAULT now(),
+    time_start time without time zone,
+    time_end time without time zone,
+    status text COLLATE pg_catalog."default" NOT NULL DEFAULT 'Pending'::text,
     CONSTRAINT "Equipment_pkey" PRIMARY KEY (id)
 )
 
@@ -82,7 +135,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Equipment"
     OWNER to postgres;
-    -- Table: public.Equipments
+-- Table: public.Equipments
 
 -- DROP TABLE IF EXISTS public."Equipments";
 
@@ -100,7 +153,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Equipments"
     OWNER to postgres;
-    -- Table: public.Facilities
+-- Table: public.Facilities
 
 -- DROP TABLE IF EXISTS public."Facilities";
 
@@ -118,7 +171,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Facilities"
     OWNER to postgres;
-    -- Table: public.Facility-Vehicle-Pivot
+-- Table: public.Facility-Vehicle-Pivot
 
 -- DROP TABLE IF EXISTS public."Facility-Vehicle-Pivot";
 
@@ -134,7 +187,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Facility-Vehicle-Pivot"
     OWNER to postgres;
-    -- Table: public.Notification
+-- Table: public.Notification
 
 -- DROP TABLE IF EXISTS public."Notification";
 
@@ -155,7 +208,7 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Notification"
     OWNER to postgres;
-    -- Table: public.User
+-- Table: public.User
 
 -- DROP TABLE IF EXISTS public."User";
 
@@ -175,7 +228,72 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."User"
     OWNER to postgres;
-    -- Table: public.VehicleBooking
+-- Table: public.User-Equipment-Pivot
+
+-- DROP TABLE IF EXISTS public."User-Equipment-Pivot";
+
+CREATE TABLE IF NOT EXISTS public."User-Equipment-Pivot"
+(
+    pivot_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    user_id character varying COLLATE pg_catalog."default",
+    equipments_id character varying COLLATE pg_catalog."default",
+    CONSTRAINT "User-Equipment-Pivot_pkey" PRIMARY KEY (pivot_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."User-Equipment-Pivot"
+    OWNER to postgres;
+-- Table: public.User-Facility-Pivot
+
+-- DROP TABLE IF EXISTS public."User-Facility-Pivot";
+
+CREATE TABLE IF NOT EXISTS public."User-Facility-Pivot"
+(
+    pivot_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    user_id character varying COLLATE pg_catalog."default",
+    facilities_id character varying COLLATE pg_catalog."default",
+    CONSTRAINT "User-Facility-Pivot_pkey" PRIMARY KEY (pivot_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."User-Facility-Pivot"
+    OWNER to postgres;
+-- Table: public.User-Sidebar-Pivot
+
+-- DROP TABLE IF EXISTS public."User-Sidebar-Pivot";
+
+CREATE TABLE IF NOT EXISTS public."User-Sidebar-Pivot"
+(
+    pivot_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    user_id character varying COLLATE pg_catalog."default" NOT NULL,
+    sidebar_key character varying COLLATE pg_catalog."default" NOT NULL,
+    enabled boolean NOT NULL DEFAULT true,
+    CONSTRAINT "User-Sidebar-Pivot_pkey" PRIMARY KEY (pivot_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."User-Sidebar-Pivot"
+    OWNER to postgres;
+-- Table: public.User-Vehicle-Pivot
+
+-- DROP TABLE IF EXISTS public."User-Vehicle-Pivot";
+
+CREATE TABLE IF NOT EXISTS public."User-Vehicle-Pivot"
+(
+    pivot_id integer NOT NULL GENERATED ALWAYS AS IDENTITY ( INCREMENT 1 START 1 MINVALUE 1 MAXVALUE 2147483647 CACHE 1 ),
+    user_id character varying COLLATE pg_catalog."default",
+    vehicles_id character varying COLLATE pg_catalog."default",
+    CONSTRAINT "User-Vehicle-Pivot_pkey" PRIMARY KEY (pivot_id)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."User-Vehicle-Pivot"
+    OWNER to postgres;
+-- Table: public.VehicleBooking
 
 -- DROP TABLE IF EXISTS public."VehicleBooking";
 
@@ -185,20 +303,26 @@ CREATE TABLE IF NOT EXISTS public."VehicleBooking"
     vehicle_id character varying(20) COLLATE pg_catalog."default",
     requestor character varying(20) COLLATE pg_catalog."default",
     department_id character varying(20) COLLATE pg_catalog."default",
-    date date,
     purpose character varying(100) COLLATE pg_catalog."default",
     booker_id integer,
     deleted boolean NOT NULL DEFAULT false,
     payment integer DEFAULT 0,
     status character varying COLLATE pg_catalog."default",
-    CONSTRAINT "VehicleBooking_pkey" PRIMARY KEY (id)
+    driver_id integer,
+    destination character varying COLLATE pg_catalog."default",
+    dates date[],
+    CONSTRAINT "VehicleBooking_pkey" PRIMARY KEY (id),
+    CONSTRAINT "VehicleBooking_driver_id_fkey" FOREIGN KEY (driver_id)
+        REFERENCES public."Drivers" (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
 )
 
 TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."VehicleBooking"
     OWNER to postgres;
-    -- Table: public.Vehicles
+-- Table: public.Vehicles
 
 -- DROP TABLE IF EXISTS public."Vehicles";
 
@@ -218,22 +342,3 @@ TABLESPACE pg_default;
 
 ALTER TABLE IF EXISTS public."Vehicles"
     OWNER to postgres;
-
-
-
-    CREATE TABLE "Drivers" (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    age INT,
-    gender TEXT,
-    contact_number TEXT,
-    enabled BOOLEAN DEFAULT true
-);
-
-CREATE TABLE "DriverVehicles" (
-    id SERIAL PRIMARY KEY,
-    driver_id INT REFERENCES "Drivers"(id) ON DELETE CASCADE,
-    vehicle_id INT REFERENCES "Vehicles"(id) ON DELETE CASCADE,
-    enabled BOOLEAN DEFAULT true,
-    UNIQUE (driver_id, vehicle_id)
-);

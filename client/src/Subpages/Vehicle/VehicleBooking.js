@@ -553,6 +553,72 @@ export default function VehicleBooking() {
             alert('Server error, could not delete booking.');
         }
     };
+    // const currentUserId = localStorage.getItem("currentUserId");
+    const [userVehicleIds, setUserVehicleIds] = useState([]);
+    const fetchUserVehicles = async () => {
+        const res = await fetch(
+            `http://localhost:5000/api/user-vehicles-fetch/${currentUserId}`
+        );
+        const data = await res.json();
+        return data.vehicles || []; // array of vehicle IDs
+    };
+    useEffect(() => {
+        if (!bookings.length || !currentUserId) return;
+
+        const fetchUserVehicles = async () => {
+            const res = await fetch(
+                `http://localhost:5000/api/user-vehicles-fetch/${currentUserId}`
+            );
+            const data = await res.json();
+            return (data.vehicles || []).map(Number);
+        };
+
+        const logVehicleBookingPivotStatus = async () => {
+            const userVehicleIds = await fetchUserVehicles();
+
+            console.group("VEHICLE BOOKINGS — PIVOT CHECK");
+            console.log("User ID:", currentUserId);
+            console.log("Vehicles in Pivot:", userVehicleIds);
+            console.log("--------------------------------");
+
+            bookings.forEach((booking, index) => {
+                const bookingVehicleId = Number(booking.vehicle_id);
+                const inPivot = userVehicleIds.includes(bookingVehicleId);
+
+                console.group(`Booking #${index + 1}`);
+                console.log("Booking Vehicle ID:", bookingVehicleId);
+
+                if (!inPivot) {
+                    console.warn("Pivot Status: ❌ NOT IN PIVOT");
+                    console.log("Vehicles in Pivot for this User:", userVehicleIds);
+                } else {
+                    console.log("Pivot Status: ✅ IN PIVOT");
+                }
+
+                console.groupEnd();
+            });
+
+            console.log("--------------------------------");
+            console.groupEnd();
+        };
+
+        logVehicleBookingPivotStatus();
+    }, [bookings, currentUserId]);
+    useEffect(() => {
+        if (!currentUserId) return;
+
+        const fetchUserVehicles = async () => {
+            const res = await fetch(
+                `http://localhost:5000/api/user-vehicles-fetch/${currentUserId}`
+            );
+            const data = await res.json();
+            setUserVehicleIds((data.vehicles || []).map(Number));
+        };
+
+        fetchUserVehicles();
+    }, [currentUserId]);
+
+
 
     return (
         <div className="w-full">
@@ -884,250 +950,291 @@ export default function VehicleBooking() {
                                 (filter.department === 'All' || toTitleCase(b.department) === filter.department) &&
                                 (filter.dateFrom === '' || b.date >= filter.dateFrom) &&
                                 (filter.dateTo === '' || b.date <= filter.dateTo)
-                            ).map((b, index) => (
-                                <React.Fragment key={index}>
-                                    <tr
-                                        className="hover:bg-gray-50 transition cursor-pointer"
-                                        onClick={() => setExpandedRow(expandedRow === index ? null : index)}
-                                    >
-                                        {/* Vehicle Name */}
-                                        <td className="px-6 py-4 font-medium text-gray-900">
-                                            {(() => {
-                                                if (!b.vehicle_id) {
-                                                    console.error("Vehicle ID is missing:", b.vehicle_id);
-                                                    return `ID: ${b.vehicle_id}`;
-                                                }
+                            ).map((b, index) => {
+                                const bookingVehicleId = Number(b.vehicle_id);
+                                const hasPivotAccess = userVehicleIds.includes(bookingVehicleId);
 
-                                                const vehicle = availableVehicles?.find(v => v.id === Number(b.vehicle_id));
-                                                return vehicle ? toTitleCase(vehicle.vehicle_name) : 'Unknown Vehicle'; // Updated fallback
-                                            })()}
-                                        </td>
-
-                                        {/* Requestor */}
-                                        <td className="px-6 py-4">{toTitleCase(b.requestor)}</td>
-
-                                        {/* Department Abbreviation */}
-                                        <td className="px-6 py-4">
-                                            {(() => {
-                                                if (!b.department_id) {
-                                                    console.error("Department ID is missing:", b.department_id);
-                                                    return `ID: ${b.department_id}`;
-                                                }
-
-                                                const affiliation = affiliations?.find(a => a.id === Number(b.department_id));
-                                                return affiliation
-                                                    ? `${affiliation.abbreviation}`
-                                                    : 'Unknown Affiliation'; // Updated fallback
-                                            })()}
-                                        </td>
-
-                                        {/* Event Date */}
-                                        <td className="px-6 py-4">
-                                            {Array.isArray(b.dates) && b.dates.length > 0
-                                                ? (() => {
-                                                    // Convert to Date objects and sort
-                                                    const dates = b.dates.map(d => new Date(d)).sort((a, b) => a - b);
-
-                                                    // Check if dates are consecutive
-                                                    const isConsecutive = dates.every((d, i) => {
-                                                        if (i === 0) return true;
-                                                        const diffDays = (d - dates[i - 1]) / (1000 * 60 * 60 * 24);
-                                                        return diffDays === 1;
-                                                    });
-
-                                                    // Format month/day
-                                                    const options = { month: 'short', day: 'numeric' };
-                                                    const year = dates[0].getFullYear();
-
-                                                    if (dates.length === 1) {
-                                                        return `${dates[0].toLocaleDateString('en-US', options)}, ${year}`;
+                                return (
+                                    <React.Fragment key={index}>
+                                        <tr
+                                            className="hover:bg-gray-50 transition cursor-pointer"
+                                            onClick={() => setExpandedRow(expandedRow === index ? null : index)}
+                                        >
+                                            {/* Vehicle Name */}
+                                            <td className="px-6 py-4 font-medium text-gray-900">
+                                                {(() => {
+                                                    if (!b.vehicle_id) {
+                                                        console.error("Vehicle ID is missing:", b.vehicle_id);
+                                                        return `ID: ${b.vehicle_id}`;
                                                     }
 
-                                                    if (isConsecutive) {
-                                                        // Feb 1–3, 2026
-                                                        return `${dates[0].toLocaleDateString('en-US', options)}–${dates[dates.length - 1].getDate()}, ${year}`;
-                                                    } else {
-                                                        // Feb 1 & 3, 2026
-                                                        const formatted = dates.map(d => d.toLocaleDateString('en-US', options));
-                                                        const last = formatted.pop();
-                                                        return `${formatted.join(' & ')} & ${last}, ${year}`;
-                                                    }
-                                                })()
-                                                : 'No date'}
-                                        </td>
-
-
-
-
-                                        {/* Purpose */}
-                                        <td className="px-6 py-4">{b.purpose}</td>
-                                        <td className="px-6 py-4">{b.destination}</td>
-                                        <td className="px-6 py-4">{b.driver_name || '—'}</td>
-                                        <td className="px-6 py-4 " onClick={(e) => e.stopPropagation()}>
-                                            {editStatusId === b.id ? (
-                                                <select
-                                                    value={b.status}
-                                                    onChange={(e) => handleStatusChange(b.id, e.target.value)}
-                                                    onBlur={() => setEditStatusId(null)} // Exit edit mode on blur
-                                                    autoFocus
-                                                    className="border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-[#96161C]"
-                                                >
-                                                    {statuses.map((status) => (
-                                                        <option key={status} value={status}>
-                                                            {status}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            ) : (
-                                                <span
-                                                    className={`px-3 py-1 rounded-full text-xs font-bold shadow
-                                                    ${b.status === 'Approved'
-                                                            ? 'bg-green-100 text-green-700 border border-green-300'
-                                                            : b.status === 'Pending'
-                                                                ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                                                                : 'bg-red-100 text-red-700 border border-red-300'
-                                                        }`}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setEditStatusId(b.id); // Enable edit mode for this booking
-                                                    }}
-                                                >
-                                                    {b.status}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td>{b.payment}</td>
-
-
-
-                                        {/* Admin or User-specific Actions */}
-                                        {isAdmin ? (
-                                            <>
-                                                <td className="px-1 py-2 flex gap-2">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
-                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
-                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                    <button onClick={() => openPaymentModal(b.id, b.payment)} className="px-4 py-1 text-sm font-semibold rounded-full border border-blue-600 text-blue-600">
-                                                        Payment
-                                                    </button>
-                                                </td>
-
-                                                {/* Payment Edit Modal */}
-                                                {showPaymentModal && (
-                                                    <div className="fixed inset-0 z-50 flex items-center justify-center"
-                                                        style={{ backgroundColor: 'rgba(128, 128, 128, 0.3)' }}>
-                                                        {/* Modal box */}
-                                                        <div className="bg-white rounded-lg shadow-lg w-80 max-w-full p-6 relative space-y-4">
-                                                            <h3 className="text-xl font-semibold">Edit Payment</h3>
-
-                                                            {/* Explanation / Guide */}
-                                                            <div className="bg-gray-100 p-3 rounded border border-gray-200 text-sm text-gray-700">
-                                                                <p><strong>Payment Calculation Guide:</strong></p>
-                                                                <p>- Standard rate: <span className="font-semibold">₱10 / km</span></p>
-                                                                <p>- Example: 50 km → 50 x 10 = ₱500</p>
-                                                                <p>- Additional charges may apply for extra hours or tolls.</p>
-                                                            </div>
-
-                                                            {/* Payment Input */}
-                                                            <form onSubmit={updatePayment} className="space-y-3">
-                                                                <div>
-                                                                    <label className="block text-sm font-medium mb-1">Payment Amount*</label>
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        value={paymentValue}
-                                                                        onChange={(e) => setPaymentValue(e.target.value)}
-                                                                        className="w-full border rounded-lg px-4 py-2"
-                                                                        required
-                                                                    />
-                                                                </div>
-
-                                                                {/* Buttons */}
-                                                                <div className="flex justify-end gap-3">
-                                                                    <button
-                                                                        type="submit"
-                                                                        className="bg-[#96161C] text-white px-6 py-2 rounded-lg"
-                                                                    >
-                                                                        Save
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setShowPaymentModal(false)}
-                                                                        className="bg-gray-200 px-6 py-2 rounded-lg"
-                                                                    >
-                                                                        Cancel
-                                                                    </button>
-                                                                </div>
-                                                            </form>
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                            </>
-                                        ) : (
-                                            parseInt(b.booker_id) === parseInt(currentUserId) ? (
-                                                <td className="px-1 py-2 flex gap-2">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
-                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
-                                                    >
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
-                                                        className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </td>
-                                            ) : (
-                                                <td className="px-6 py-4 font-semibold text-[#daa7aa]">Hidden</td>
-                                            )
-                                        )}
-
-                                    </tr>
-
-
-                                    {/* Expanded Detail Row */}
-                                    {expandedRow === index && (
-                                        <tr className="bg-gray-50">
-                                            <td colSpan={8} className="px-6 py-4">
-                                                <div className="p-4 rounded-lg border border-gray-200 bg-white flex flex-col md:flex-row md:justify-between gap-4 items-start">
-
-                                                    {/* Booking Details */}
-                                                    <div className="space-y-2">
-                                                        <p><strong>Vehicle Type:</strong> {toTitleCase(b.vehicleType || b.vehicle_Type)}</p>
-                                                        <p><strong>Requestor:</strong> {toTitleCase(b.requestor)}</p>
-                                                        <p><strong>Department:</strong> {toTitleCase(b.department)}</p>
-                                                        <p><strong>Date:</strong> {new Date(b.event_date || b.date).toLocaleDateString()}</p>
-                                                        <p><strong>Purpose:</strong> {b.purpose}</p>
-                                                    </div>
-
-                                                    {/* Download Receipt */}
-                                                    <div className="flex items-center gap-2">
-                                                        <button
-                                                            onClick={() => downloadReceipt(b)}
-                                                            className="px-4 py-2 text-sm font-medium rounded-md bg-blue-100 text-blue-800 hover:bg-blue-200"
-                                                        >
-                                                            Download Receipt
-                                                        </button>
-                                                    </div>
-
-                                                </div>
+                                                    const vehicle = availableVehicles?.find(v => v.id === Number(b.vehicle_id));
+                                                    return vehicle ? toTitleCase(vehicle.vehicle_name) : 'Unknown Vehicle'; // Updated fallback
+                                                })()}
                                             </td>
+
+                                            {/* Requestor */}
+                                            <td className="px-6 py-4">{toTitleCase(b.requestor)}</td>
+
+                                            {/* Department Abbreviation */}
+                                            <td className="px-6 py-4">
+                                                {(() => {
+                                                    if (!b.department_id) {
+                                                        console.error("Department ID is missing:", b.department_id);
+                                                        return `ID: ${b.department_id}`;
+                                                    }
+
+                                                    const affiliation = affiliations?.find(a => a.id === Number(b.department_id));
+                                                    return affiliation
+                                                        ? `${affiliation.abbreviation}`
+                                                        : 'Unknown Affiliation'; // Updated fallback
+                                                })()}
+                                            </td>
+
+                                            {/* Event Date */}
+                                            <td className="px-6 py-4">
+                                                {Array.isArray(b.dates) && b.dates.length > 0
+                                                    ? (() => {
+                                                        // Convert to Date objects and sort
+                                                        const dates = b.dates.map(d => new Date(d)).sort((a, b) => a - b);
+
+                                                        // Check if dates are consecutive
+                                                        const isConsecutive = dates.every((d, i) => {
+                                                            if (i === 0) return true;
+                                                            const diffDays = (d - dates[i - 1]) / (1000 * 60 * 60 * 24);
+                                                            return diffDays === 1;
+                                                        });
+
+                                                        // Format month/day
+                                                        const options = { month: 'short', day: 'numeric' };
+                                                        const year = dates[0].getFullYear();
+
+                                                        if (dates.length === 1) {
+                                                            return `${dates[0].toLocaleDateString('en-US', options)}, ${year}`;
+                                                        }
+
+                                                        if (isConsecutive) {
+                                                            // Feb 1–3, 2026
+                                                            return `${dates[0].toLocaleDateString('en-US', options)}–${dates[dates.length - 1].getDate()}, ${year}`;
+                                                        } else {
+                                                            // Feb 1 & 3, 2026
+                                                            const formatted = dates.map(d => d.toLocaleDateString('en-US', options));
+                                                            const last = formatted.pop();
+                                                            return `${formatted.join(' & ')} & ${last}, ${year}`;
+                                                        }
+                                                    })()
+                                                    : 'No date'}
+                                            </td>
+
+
+
+
+                                            {/* Purpose */}
+                                            <td className="px-6 py-4">{b.purpose}</td>
+                                            <td className="px-6 py-4">{b.destination}</td>
+                                            <td className="px-6 py-4">{b.driver_name || '—'}</td>
+                                            <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                                                {!hasPivotAccess ? (
+                                                    <span className="text-gray-400 italic">No Access</span>
+                                                ) : editStatusId === b.id ? (
+                                                    <select
+                                                        value={b.status}
+                                                        onChange={(e) => handleStatusChange(b.id, e.target.value)}
+                                                        onBlur={() => setEditStatusId(null)}
+                                                        autoFocus
+                                                        className="border rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-[#96161C]"
+                                                    >
+                                                        {statuses.map((status) => (
+                                                            <option key={status} value={status}>
+                                                                {status}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                ) : (
+                                                    <span
+                                                        className={`px-3 py-1 rounded-full text-xs font-bold shadow
+        ${b.status === 'Approved'
+                                                                ? 'bg-green-100 text-green-700 border border-green-300'
+                                                                : b.status === 'Pending'
+                                                                    ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+                                                                    : 'bg-red-100 text-red-700 border border-red-300'
+                                                            }`}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditStatusId(b.id);
+                                                        }}
+                                                    >
+                                                        {b.status}
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            <td>{b.payment}</td>
+
+
+
+                                            {/* Admin or User-specific Actions */}
+                                            {isAdmin ? (
+                                                <>
+                                                    <td className="px-6 py-4 font-semibold">
+                                                        {!hasPivotAccess ? (
+                                                            <span className="text-gray-400 italic">No Access</span>
+                                                        ) : isAdmin ? (
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
+                                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                                >
+                                                                    Edit
+                                                                </button>
+
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
+                                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                                >
+                                                                    Delete
+                                                                </button>
+
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        openPaymentModal(b.id, b.payment);
+                                                                    }}
+                                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-blue-600 text-blue-600"
+                                                                >
+                                                                    Payment
+                                                                </button>
+                                                            </div>
+                                                        ) : parseInt(b.booker_id) === parseInt(currentUserId) ? (
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
+                                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                                >
+                                                                    Edit
+                                                                </button>
+
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
+                                                                    className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-[#daa7aa]">Hidden</span>
+                                                        )}
+                                                    </td>
+
+
+                                                    {/* Payment Edit Modal */}
+                                                    {showPaymentModal && (
+                                                        <div className="fixed inset-0 z-50 flex items-center justify-center"
+                                                            style={{ backgroundColor: 'rgba(128, 128, 128, 0.3)' }}>
+                                                            {/* Modal box */}
+                                                            <div className="bg-white rounded-lg shadow-lg w-80 max-w-full p-6 relative space-y-4">
+                                                                <h3 className="text-xl font-semibold">Edit Payment</h3>
+
+                                                                {/* Explanation / Guide */}
+                                                                <div className="bg-gray-100 p-3 rounded border border-gray-200 text-sm text-gray-700">
+                                                                    <p><strong>Payment Calculation Guide:</strong></p>
+                                                                    <p>- Standard rate: <span className="font-semibold">₱10 / km</span></p>
+                                                                    <p>- Example: 50 km → 50 x 10 = ₱500</p>
+                                                                    <p>- Additional charges may apply for extra hours or tolls.</p>
+                                                                </div>
+
+                                                                {/* Payment Input */}
+                                                                <form onSubmit={updatePayment} className="space-y-3">
+                                                                    <div>
+                                                                        <label className="block text-sm font-medium mb-1">Payment Amount*</label>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            value={paymentValue}
+                                                                            onChange={(e) => setPaymentValue(e.target.value)}
+                                                                            className="w-full border rounded-lg px-4 py-2"
+                                                                            required
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Buttons */}
+                                                                    <div className="flex justify-end gap-3">
+                                                                        <button
+                                                                            type="submit"
+                                                                            className="bg-[#96161C] text-white px-6 py-2 rounded-lg"
+                                                                        >
+                                                                            Save
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setShowPaymentModal(false)}
+                                                                            className="bg-gray-200 px-6 py-2 rounded-lg"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </div>
+                                                                </form>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                </>
+                                            ) : (
+                                                parseInt(b.booker_id) === parseInt(currentUserId) ? (
+                                                    <td className="px-1 py-2 flex gap-2">
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleEdit(index); }}
+                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(index); }}
+                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </td>
+                                                ) : (
+                                                    <td className="px-6 py-4 font-semibold text-[#daa7aa]">Hidden</td>
+                                                )
+                                            )}
+
                                         </tr>
-                                    )}
-                                </React.Fragment>
-                            ))
+
+
+                                        {/* Expanded Detail Row */}
+                                        {expandedRow === index && (
+                                            <tr className="bg-gray-50">
+                                                <td colSpan={8} className="px-6 py-4">
+                                                    <div className="p-4 rounded-lg border border-gray-200 bg-white flex flex-col md:flex-row md:justify-between gap-4 items-start">
+
+                                                        {/* Booking Details */}
+                                                        <div className="space-y-2">
+                                                            <p><strong>Vehicle Type:</strong> {toTitleCase(b.vehicleType || b.vehicle_Type)}</p>
+                                                            <p><strong>Requestor:</strong> {toTitleCase(b.requestor)}</p>
+                                                            <p><strong>Department:</strong> {toTitleCase(b.department)}</p>
+                                                            <p><strong>Date:</strong> {new Date(b.event_date || b.date).toLocaleDateString()}</p>
+                                                            <p><strong>Purpose:</strong> {b.purpose}</p>
+                                                        </div>
+
+                                                        {/* Download Receipt */}
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                onClick={() => downloadReceipt(b)}
+                                                                className="px-4 py-2 text-sm font-medium rounded-md bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                                            >
+                                                                Download Receipt
+                                                            </button>
+                                                        </div>
+
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })
                         )}
                     </tbody>
 

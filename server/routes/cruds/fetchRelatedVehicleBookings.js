@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
     try {
         const result = await pool.query(
             `SELECT *
-             FROM "vehiclebookings"
+             FROM "Vehiclebooking"
              WHERE date = $1
                AND purpose = $2
                AND requestor = $3`,

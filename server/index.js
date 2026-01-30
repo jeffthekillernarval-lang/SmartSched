@@ -196,6 +196,42 @@ app.use('/api/drivers-by-vehicle', fetchDriversByVehicle);
 
 const relatedVehicleBookings = require('./routes/cruds/fetchRelatedVehicleBookings')
 app.use('/api/related-vehicle-bookings', relatedVehicleBookings);
+
+const userFacilitiesRoute = require('./routes/booking/userFacilities');
+app.use('/api/user-facilities', userFacilitiesRoute);
+const userFacilitiesFetchRoute = require('./routes/booking/userFacilitiesFetch');
+app.use('/api/user-facilities-fetch', userFacilitiesFetchRoute);
+
+const createEquipmentBookingRoute = require('./routes/booking/createEquipmentBooking');
+app.use('/api/create-equipment-booking', createEquipmentBookingRoute);
+
+const fetchEquipmentBookingsRoute = require('./routes/booking/fetchEquipmentBookings');
+app.use('/api/fetch-equipment-bookings', fetchEquipmentBookingsRoute);
+const deleteEquipmentBookingRoute = require('./routes/booking/deleteEquipmentBooking');
+app.use('/api/delete-equipment-booking', deleteEquipmentBookingRoute);
+
+const userVehiclesRoutes = require('./routes/booking/userVehicles');
+const userEquipmentsRoutes = require('./routes/booking/userEquipments');
+const availableEquipments = require('./routes/cruds/availableEquipments');
+
+app.use('/api', userVehiclesRoutes);
+app.use('/api', userEquipmentsRoutes);
+app.use('/api', availableEquipments);
+const updateEquipmentStatus = require('./routes/cruds/updateEquipmentStatus');
+
+app.use('/api/update-equipment-status', updateEquipmentStatus);
+
+const updateEquipmentBooking = require('./routes/cruds/updateEquipmentBooking');
+app.use('/api/update-equipment-booking', updateEquipmentBooking);
+
+
+const fetchUserSidebar = require('./routes/cruds/userSidebarFetch');
+app.use('/api/user-sidebar-fetch', fetchUserSidebar);
+const userSidebar = require('./routes/cruds/userSidebar');
+app.use('/api/user-sidebar', userSidebar);
+// const fetchUserSidebar = require('./routes/cruds/fetchUserSidebar');
+// app.use('/api/user-sidebar-fetch', fetchUserSidebar);
+// 
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });

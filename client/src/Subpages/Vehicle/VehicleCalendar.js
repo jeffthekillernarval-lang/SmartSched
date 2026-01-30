@@ -138,25 +138,31 @@ export default function VehicleBookingCalendar() {
             .then(data => {
                 // If backend returns { success, bookings }, use bookings array
                 const bookingsArr = Array.isArray(data) ? data : data.bookings || [];
-                const formatted = bookingsArr.map(b => {
-                    // Use the lowercase, hyphenated value for color lookup
-                    const typeKey = (b.vehicleType || b.vehicle_Type || 'unregistered vehicle').toLowerCase();
-                    const bgColor = vehicleTypeColors[typeKey] || '#e0e0e0';
-                    return {
-                        title: `${toTitleCase(b.vehicleType || b.vehicle_Type)} | ${toTitleCase(b.requestor)}`,
-                        start: b.date,
-                        end: b.date,
-                        backgroundColor: bgColor,
-                        borderColor: bgColor,
-                        textColor: '#000000',
-                        extendedProps: {
-                            vehicleType: toTitleCase(b.vehicleType || b.vehicle_Type),
-                            department: toTitleCase(b.department),
-                            purpose: b.purpose,
-                            requestor: toTitleCase(b.requestor)
-                        }
-                    };
-                });
+                const formatted = bookingsArr
+                    .filter(b => !b.deleted && Array.isArray(b.dates) && b.dates.length > 0)
+                    .map(b => {
+                        const typeKey = (b.vehicle_id || 'unregistered vehicle').toLowerCase();
+                        const bgColor = vehicleTypeColors[typeKey] || '#e0e0e0';
+
+                        return {
+                            id: b.id,
+                            title: `Vehicle #${b.vehicle_id} | ${toTitleCase(b.requestor)}`,
+                            start: b.dates[0],        // ✅ FIX
+                            allDay: true,             // ✅ Vehicle bookings are date-based
+                            backgroundColor: bgColor,
+                            borderColor: bgColor,
+                            textColor: '#000000',
+                            extendedProps: {
+                                vehicleType: `Vehicle #${b.vehicle_id}`,
+                                department: toTitleCase(b.department_id),
+                                purpose: b.purpose,
+                                requestor: toTitleCase(b.requestor),
+                                destination: b.destination
+                            }
+                        };
+                    });
+
+
                 setBookings(formatted);
                 setEvents(formatted);
                 // Extract unique vehicle types and departments, sort alphabetically

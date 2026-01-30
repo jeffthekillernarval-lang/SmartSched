@@ -42,52 +42,96 @@ export default function Booking() {
     const [vehicleType, setVehicleType] = useState('');
     const [rowsPerPage, setRowsPerPage] = useState(10);
     const [affiliations, setAffiliations] = useState([]);
-    const [equipmentMap, setEquipmentMap] = useState({});
+    // const [equipmentMap, setEquipmentMap] = useState({});
     const [showVehicle, setShowVehicle] = useState(false);
-    const [equipmentRows, setEquipmentRows] = useState([]);
-    const [equipmentList, setEquipmentList] = useState([]);
-    const [equipmentError, setEquipmentError] = useState('');
+    // const [equipmentRows, setEquipmentRows] = useState([]);
+    // const [equipmentList, setEquipmentList] = useState([]);
+    // const [equipmentError, setEquipmentError] = useState('');
     const [facilitiesList, setFacilitiesList] = useState([]);
     const [facilitiesError, setFacilitiesError] = useState('');
     const [UserisNotAdmin, setUserisNotAdmin] = useState(false);
     const [editStatusIndex, setEditStatusIndex] = useState(null);
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [conflictBooking, setConflictBooking] = useState(null);
-    const [showVehicleForm, setShowVehicleForm] = useState(false);
+    // const [showVehicleForm, setShowVehicleForm] = useState(false);
     const [affiliationsError, setAffiliationsError] = useState('');
-    const [equipmentLoading, setEquipmentLoading] = useState(false);
+    // const [equipmentLoading, setEquipmentLoading] = useState(false);
     const [editReservationId, setEditReservationId] = useState(null);
     const [showRequesterInfo, setShowRequesterInfo] = useState(false);
     const [loadingFacilities, setLoadingFacilities] = useState(false);
-    const [deletedEquipmentIds, setDeletedEquipmentIds] = useState([]);
+    // const [deletedEquipmentIds, setDeletedEquipmentIds] = useState([]);
     const [showBookingSummary, setShowBookingSummary] = useState(false);
     const [loadingAffiliations, setLoadingAffiliations] = useState(true);
     const [showFacilityBreakdown, setShowFacilityBreakdown] = useState(false);
-    // const [showVehicle, setShowVehicle] = useState(false);
-    // const [vehicleType, setVehicleType] = useState('');
-    const [vehicleList, setVehicleList] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-
+    const [userFacilityIds, setUserFacilityIds] = useState([]);
+    const facilityMap = React.useMemo(() => {
+        const map = {};
+        facilitiesList.forEach(f => {
+            map[String(f.id)] = f.name;
+        });
+        return map;
+    }, [facilitiesList]);
     useEffect(() => {
-        if (showVehicle) {
-            setLoading(true);
-            fetch('http://localhost:5000/api/fetch-vehicle')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        setVehicleList(data.vehicles); // Assume array of { id, name, type, passenger_capacity }
-                    } else {
-                        setError('Failed to fetch vehicles');
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    setError('Error fetching vehicles');
-                })
-                .finally(() => setLoading(false));
-        }
-    }, [showVehicle]);
+        if (!userId) return;
+
+        const fetchUserFacilities = async () => {
+            try {
+                const res = await fetch(
+                    `http://localhost:5000/api/user-facilities-fetch/${userId}`
+                );
+                const data = await res.json();
+
+                // normalize to string IDs
+                const ids = (data.facilities || []).map(String);
+                setUserFacilityIds(ids);
+            } catch (err) {
+                console.error("Failed to fetch user facilities pivot", err);
+            }
+        };
+
+        fetchUserFacilities();
+    }, [userId]);
+    useEffect(() => {
+        if (!bookings.length || !userFacilityIds.length) return;
+
+        console.group("FACILITY BOOKINGS — PIVOT CHECK");
+        console.log("User ID:", userId);
+        console.log("Facilities in Pivot (IDs):", userFacilityIds);
+        console.log("--------------------------------");
+
+        bookings.forEach((booking, index) => {
+            // 🔑 ALWAYS compare by ID
+            const bookingFacilityId = String(
+                booking.facility_id || booking.facility || ""
+            );
+
+            const bookingFacilityName = String(
+                booking.event_facility || "UNKNOWN NAME"
+            );
+
+            const inPivot = userFacilityIds.includes(bookingFacilityId);
+
+            console.group(`Booking #${index + 1}`);
+            console.log("Booking Facility ID:", bookingFacilityId);
+            console.log(
+                `Booking Facility NAME: ${bookingFacilityName} (ID: ${bookingFacilityId})`
+            );
+
+            if (inPivot) {
+                console.log("Pivot Status: ✅ IN PIVOT");
+            } else {
+                console.warn("Pivot Status: ❌ NOT IN PIVOT");
+                console.log("Facilities in Pivot (IDs):", userFacilityIds);
+            }
+
+            console.groupEnd();
+        });
+
+        console.log("--------------------------------");
+        console.groupEnd();
+    }, [bookings, userFacilityIds, userId]);
+
+
     const [schedules, setSchedules] = useState([
         { date: '' || null, startTime: '' || null, endTime: '' || null }
     ]);
@@ -132,20 +176,7 @@ export default function Booking() {
             y += 5;
         }
 
-        // Equipment
-        if (equipment.length > 0) {
-            doc.setFontSize(14);
-            doc.text("Equipment Reservations:", left, y);
-            y += 8;
-            doc.setFontSize(12);
-            equipment.forEach((eq, idx) => {
-                doc.text(`${idx + 1}. ${eq.type || "Unknown"} - ${eq.quantity || 0}×`, left + 5, y);
-                y += 7;
-            });
-            y += 5;
-        }
 
-        // Signatures
         y += 10;
         doc.text("__________________________", left, y);
         doc.text("Requested By", left, y + 6);
@@ -155,13 +186,11 @@ export default function Booking() {
         // Save PDF
         doc.save(`${booking.event_name || "booking"}-receipt.pdf`);
     };
-    // const vehicleBookings = {
-    //     [selectedBooking.id]: [''] // or array of vehicle bookings
-    // };
+
     const booking = selectedBooking ?? null;
     const bookingId = booking?.id ?? null;
     const vehicles = booking?.vehicles ?? [];
-    const equipment = bookingId ? equipmentMap?.[bookingId] ?? [] : [];
+    // const equipment = bookingId ? equipmentMap?.[bookingId] ?? [] : [];
     const [referenceVehicles, setReferenceVehicles] = useState([]);
     useEffect(() => {
         const fetchReferenceVehicles = async () => {
@@ -229,21 +258,21 @@ export default function Booking() {
         }
     };
 
-    useEffect(() => {
-        setEquipmentLoading(true);
+    // useEffect(() => {
+    //     setEquipmentLoading(true);
 
-        fetch('http://localhost:5000/api/fetch-equipments')
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    setEquipmentList(data.equipments || []);
-                } else {
-                    setEquipmentError('Failed to load equipment');
-                }
-            })
-            .catch(() => setEquipmentError('Failed to load equipment'))
-            .finally(() => setEquipmentLoading(false));
-    }, []);
+    //     fetch('http://localhost:5000/api/fetch-equipments')
+    //         .then(res => res.json())
+    //         .then(data => {
+    //             if (data.success) {
+    //                 setEquipmentList(data.equipments || []);
+    //             } else {
+    //                 setEquipmentError('Failed to load equipment');
+    //             }
+    //         })
+    //         .catch(() => setEquipmentError('Failed to load equipment'))
+    //         .finally(() => setEquipmentLoading(false));
+    // }, []);
 
     useEffect(() => {
         const fetchFacilities = async () => {
@@ -322,21 +351,7 @@ export default function Booking() {
         }
     };
 
-    const fetchEquipmentForBooking = async (bookingId) => {
-        try {
-            const res = await fetch(`http://localhost:5000/api/fetch-booking-equipment?booking_id=${bookingId}`);
-            const data = await res.json();
 
-            if (data.success) {
-                setEquipmentMap(prev => ({
-                    ...prev,
-                    [bookingId]: data.equipment,
-                }));
-            }
-        } catch (err) {
-            console.error(`Error fetching equipment for booking ${bookingId}:`, err);
-        }
-    };
 
     const InfoItem = ({ icon, label, value }) => (
         <div className="flex gap-4">
@@ -455,9 +470,9 @@ export default function Booking() {
                 setBookings(visibleBookings);
 
                 // Fetch equipment for each visible booking
-                visibleBookings.forEach(b => {
-                    fetchEquipmentForBooking(b.id);
-                });
+                // visibleBookings.forEach(b => {
+                //     fetchEquipmentForBooking(b.id);
+                // });
             })
             .catch(err => {
                 console.log('Fetch bookings error:', err);
@@ -510,7 +525,9 @@ export default function Booking() {
     }, [bookings, filter]);
 
     // Unique values for dropdowns
-    const facilities = Array.from(new Set(bookings.map(b => b.event_facility || b.facility || '').filter(Boolean)));
+    const facilities = Array.from(
+        new Set(bookings.map(b => String(b.event_facility)))
+    );
     const orgs = Array.from(new Set(bookings.map(b => b.organization || b.org || '').filter(Boolean)));
     const statuses = ['All', 'approved', 'pending', 'declined', 'rescheduled'];
     const [editingId, setEditingId] = useState(null);
@@ -554,13 +571,26 @@ export default function Booking() {
         if (!editingId) {
             try {
                 const res = await fetch(
-                    `http://localhost:5000/api/fetch-booking-conflicts?venue=${encodeURIComponent(form.facility)}`
+                    `http://localhost:5000/api/fetch-booking-conflicts?facility_id=${encodeURIComponent(form.facility)}`
                 );
+
                 const data = await res.json();
 
                 if (data.success && Array.isArray(data.bookings)) {
-                    const isTimeOverlap = (aStart, aEnd, bStart, bEnd) =>
-                        aStart < bEnd && aEnd > bStart;
+                    const toMinutes = (time) => {
+                        const [h, m] = time.split(':').map(Number);
+                        return h * 60 + m;
+                    };
+
+                    const isTimeOverlap = (aStart, aEnd, bStart, bEnd) => {
+                        const aS = toMinutes(aStart);
+                        const aE = toMinutes(aEnd);
+                        const bS = toMinutes(bStart);
+                        const bE = toMinutes(bEnd);
+
+                        return aS < bE && aE > bS;
+                    };
+
 
                     for (const newSchedule of schedules) {
                         for (const existing of data.bookings) {
@@ -601,17 +631,7 @@ export default function Booking() {
 
         /* ===============================
            EQUIPMENT VALIDATION
-        =============================== */
-        const cleanEquipment = equipmentRows.filter(
-            eq => eq.type && eq.quantity
-        );
-
-        if (cleanEquipment.length === 0) {
-            const proceed = window.confirm(
-                "Are you going to finish booking a venue without equipment?\n\nOK = Continue\nCancel = Go back"
-            );
-            if (!proceed) return;
-        }
+        // =============================== */
 
         /* ===============================
            CREATE / UPDATE BOOKING
@@ -650,37 +670,12 @@ export default function Booking() {
             /* ===============================
                SAFETY CHECK
             =============================== */
-            // if (!data.booking?.id) {
-            //     console.error('Missing booking ID:', data);
-            //     alert('Booking saved, but equipment could not be attached.');
-            //     return;
-            // }
+
             if (!Array.isArray(data.bookings) || data.bookings.length === 0) {
                 console.error('Missing booking IDs:', data);
                 alert('Booking saved, but equipment could not be attached.');
                 return;
             }
-            /* ===============================
-               CREATE EQUIPMENT (CREATE ONLY)
-            =============================== */
-            if (!editingId && cleanEquipment.length > 0) {
-                for (const bookingId of data.bookings) {
-                    const eqRes = await fetch('http://localhost:5000/api/create-equipment', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            booking_id: bookingId,
-                            equipment: cleanEquipment
-                        })
-                    });
-
-                    const eqData = await eqRes.json();
-                    if (!eqData.success) {
-                        console.error(`Failed to attach equipment to booking ${bookingId}`);
-                    }
-                }
-            }
-
 
 
             /* ===============================
@@ -708,7 +703,7 @@ export default function Booking() {
                 booking_fee: 0,
             });
 
-            setEquipmentRows([]);
+            // setEquipmentRows([]);
             setEditingId(null);
             setShowForm(false);
             setSchedules([{ date: '', startTime: '', endTime: '' }]); // Reset schedules
@@ -734,163 +729,7 @@ export default function Booking() {
         setSchedules(updatedSchedules);
     };
 
-    // const handleSubmit = async (e) => {
-    //     e.preventDefault();
-    //     console.log('Venue from form:', form.facility);
 
-    //     let isConflict = false;
-
-    //     /* ===============================
-    //        CONFLICT CHECK (CREATE ONLY)
-    //     =============================== */
-    //     if (!editingId) {
-    //         try {
-    //             const res = await fetch(
-    //                 `http://localhost:5000/api/fetch-booking-conflicts?venue=${encodeURIComponent(form.facility)}`
-    //             );
-    //             const data = await res.json();
-
-    //             if (data.success) {
-    //                 const newDate = form.date; // ✅ DO NOT SHIFT DATE
-    //                 const newStart = form.startTime;
-    //                 const newEnd = form.endTime;
-
-    //                 const isTimeOverlap = (aStart, aEnd, bStart, bEnd) =>
-    //                     aStart < bEnd && aEnd > bStart;
-
-    //                 for (const b of data.bookings) {
-    //                     const bDate = (b.event_date || b.date || '').split('T')[0];
-    //                     const bStart = b.starting_time || '';
-    //                     const bEnd = b.ending_time || '';
-
-    //                     if (bDate === newDate && isTimeOverlap(newStart, newEnd, bStart, bEnd)) {
-    //                         setConflictBooking(b);
-    //                         isConflict = true;
-    //                         break;
-    //                     }
-    //                 }
-    //             }
-    //         } catch (err) {
-    //             console.error('Conflict check error:', err);
-    //         }
-
-    //         if (isConflict) {
-    //             alert('Cannot create booking due to a conflict.');
-    //             return;
-    //         }
-    //     }
-
-    //     /* ===============================
-    //        EQUIPMENT VALIDATION
-    //     =============================== */
-    //     const cleanEquipment = equipmentRows.filter(
-    //         eq => eq.type && eq.quantity
-    //     );
-
-    //     if (cleanEquipment.length === 0) {
-    //         const proceed = window.confirm(
-    //             "Are you going to finish booking a venue without equipment?\n\nOK = Continue\nCancel = Go back"
-    //         );
-    //         if (!proceed) return;
-    //     }
-
-    //     /* ===============================
-    //        CREATE / UPDATE BOOKING
-    //     =============================== */
-    //     try {
-    //         const url = editingId
-    //             ? `http://localhost:5000/api/edit-booking/${editingId}`
-    //             : 'http://localhost:5000/api/create-booking';
-
-    //         const method = editingId ? 'PUT' : 'POST';
-
-    //         const response = await fetch(url, {
-    //             method,
-    //             headers: { 'Content-Type': 'application/json' },
-    //             body: JSON.stringify({
-    //                 schedules,
-    //                 event_name: form.title,
-    //                 event_facility: form.facility,
-    //                 requested_by: form.requestedBy,
-    //                 organization: form.org,
-    //                 contact: form.contact,
-    //                 creator_id: currentUserId,
-    //                 reservation: form.bookingType === 'reservation',
-    //                 insider: form.insider,
-    //                 booking_fee: form.booking_fee ?? 0
-    //             })
-    //         });
-
-    //         const data = await response.json();
-
-    //         if (!data.success) {
-    //             alert(data.message || 'Booking failed');
-    //             return;
-    //         }
-
-    //         /* ===============================
-    //            SAFETY CHECK
-    //         =============================== */
-    //         if (!data.booking?.id) {
-    //             console.error('Missing booking ID:', data);
-    //             alert('Booking saved, but equipment could not be attached.');
-    //             return;
-    //         }
-
-    //         /* ===============================
-    //            CREATE EQUIPMENT (CREATE ONLY)
-    //         =============================== */
-    //         if (!editingId && cleanEquipment.length > 0) {
-    //             const eqRes = await fetch('http://localhost:5000/api/create-equipment', {
-    //                 method: 'POST',
-    //                 headers: { 'Content-Type': 'application/json' },
-    //                 body: JSON.stringify({
-    //                     booking_id: data.booking.id,
-    //                     equipment: cleanEquipment
-    //                 })
-    //             });
-
-    //             const eqData = await eqRes.json();
-    //             if (!eqData.success) {
-    //                 alert('Booking saved, but equipment failed to save.');
-    //             }
-    //         }
-
-    //         /* ===============================
-    //            REFRESH & RESET
-    //         =============================== */
-    //         alert(editingId ? 'Booking updated successfully' : 'Booking created successfully');
-
-    //         const refreshed = await fetch('http://localhost:5000/api/fetch-bookings');
-    //         const refreshedData = await refreshed.json();
-    //         if (refreshedData.success) {
-    //             setBookings(refreshedData.bookings);
-    //         }
-
-    //         setForm({
-    //             title: '',
-    //             facility: '',
-    //             date: '',
-    //             startTime: '',
-    //             endTime: '',
-    //             requestedBy: '',
-    //             org: '',
-    //             contact: '',
-    //             bookingType: 'booking',
-    //             insider: 'student',
-    //             booking_fee: 0,
-    //         });
-
-    //         setEquipmentRows([]);
-    //         setEditingId(null);
-    //         setShowForm(false);
-    //         setSchedules([{ date: '', startTime: '', endTime: '' }]); // Reset schedules
-
-    //     } catch (err) {
-    //         console.error(err);
-    //         alert('Server error');
-    //     }
-    // };
 
     const ActionButton = ({ label, variant = "default", disabled }) => {
         const base = "px-4 py-1.5 rounded-md text-sm font-medium transition focus:outline-none";
@@ -983,14 +822,14 @@ export default function Booking() {
         setSchedules(bookingSchedules);
 
         setForm({
-            title: booking.event_name || booking.title || '',
-            facility: booking.event_facility || booking.facility || '',
-            requestedBy: booking.requested_by || booking.requestedBy || '',
-            org: booking.organization || booking.org || '',
+            title: booking.event_name || '',
+            facility: String(booking.event_facility), // 🔑 ID
+            requestedBy: booking.requested_by || '',
+            org: booking.organization || '',
             contact: booking.contact || '',
             bookingType: booking.reservation ? 'reservation' : 'booking',
-            insider: booking.insider ? 'employee' : booking.userType || 'student',
-            booking_fee: booking.booking_fee ?? 0,
+            insider: booking.insider || 'student',
+            booking_fee: booking.booking_fee ?? 0
         });
 
         setShowForm(true);
@@ -1296,7 +1135,7 @@ export default function Booking() {
                                         {loadingFacilities && <option disabled>Loading...</option>}
                                         {facilitiesError && <option disabled>{facilitiesError}</option>}
                                         {facilitiesList.map((f) => (
-                                            <option key={f.id} value={f.name}>
+                                            <option key={f.id} value={f.id}>
                                                 {f.name} {/* render only the name, not the object */}
                                             </option>
                                         ))}
@@ -1363,137 +1202,6 @@ export default function Booking() {
 
                                 </div>
                                 <div>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            if (equipmentRows.length < 5) {
-                                                setEquipmentRows([...equipmentRows, { type: '', quantity: '' }]);
-                                            }
-                                        }}
-                                        className="bg-[#96161C] text-white px-8 py-2 rounded-lg font-semibold hover:bg-[#7a1217] transition"
-                                    >
-                                        Add Equipment +
-                                    </button>
-                                    {equipmentRows.map((row, index) => (
-                                        <div key={index} className="flex gap-4 items-center my-2">
-                                            <div className="flex-1">
-                                                <label className="block text-sm font-medium mb-1">Equipment Type</label>
-                                                <select
-                                                    value={row.type}
-                                                    onChange={(e) => {
-                                                        const updated = [...equipmentRows];
-                                                        updated[index].type = e.target.value;
-                                                        setEquipmentRows(updated);
-                                                    }}
-                                                    className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
-                                                    required
-                                                >
-                                                    <option value="">Select Equipment</option>
-
-                                                    {equipmentLoading && (
-                                                        <option disabled>Loading...</option>
-                                                    )}
-
-                                                    {equipmentError && (
-                                                        <option disabled>{equipmentError}</option>
-                                                    )}
-
-                                                    {equipmentList.map(eq => (
-                                                        <option key={eq.id} value={eq.name}>
-                                                            {eq.name}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <div className="flex-1">
-                                                <label className="block text-sm font-medium mb-1">Quantity</label>
-                                                <input
-                                                    type="number"
-                                                    min="1"
-                                                    max="5"
-                                                    value={row.quantity}
-                                                    onChange={(e) => {
-                                                        const updated = [...equipmentRows];
-                                                        updated[index].quantity = e.target.value;
-                                                        setEquipmentRows(updated);
-                                                    }}
-                                                    className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C]"
-                                                    required
-                                                />
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (equipmentRows[index].id) {
-                                                        setDeletedEquipmentIds(prev => [...prev, equipmentRows[index].id]);
-                                                    }
-                                                    setEquipmentRows(equipmentRows.filter((_, i) => i !== index));
-                                                }}
-                                                className="text-red-600 hover:text-red-800 text-lg font-bold"
-                                                title="Remove"
-                                            >
-                                                &times;
-                                            </button>
-                                        </div>
-                                    ))}
-                                    {/* <button
-                                        type="button"
-                                        onClick={() => setShowVehicle(true)}
-                                        className="bg-[#96161C] text-white px-6 py-2 rounded-lg"
-                                    >
-                                        Add Vehicle +
-                                    </button> */}
-
-                                    {showVehicle && (
-                                        <div className="mt-4 p-4 border rounded-lg bg-gray-50 relative">
-                                            {/* Close Button */}
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setShowVehicle(false);
-                                                    setVehicleType('');
-                                                }}
-                                                className="absolute top-2 right-2 text-gray-600 hover:text-gray-900 font-bold text-lg"
-                                                title="Close"
-                                            >
-                                                &times;
-                                            </button>
-
-                                            <label className="block text-sm font-medium mb-1">
-                                                Vehicle*
-                                            </label>
-
-                                            <select
-                                                value={vehicleType}
-                                                onChange={(e) => setVehicleType(e.target.value)}
-                                                className="w-full border rounded-lg px-4 py-2 mb-3"
-                                                required
-                                            >
-                                                <option value="">Select a vehicle...</option>
-                                                {loading && <option disabled>Loading...</option>}
-                                                {error && <option disabled>{error}</option>}
-                                                {vehicleList.map(v => (
-                                                    <option key={v.id} value={v.id}>
-                                                        {`${v.vehicle_name} | ${v.vehicle_type} | Capacity: ${v.passenger_capacity}`}
-                                                    </option>
-                                                ))}
-                                            </select>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => handleCreateVehicleFromBooking(vehicleType)}
-                                                disabled={!vehicleType}
-                                                className="bg-[#96161C] text-white px-6 py-2 rounded-lg disabled:opacity-50"
-                                            >
-                                                Save Vehicle Booking
-                                            </button>
-                                        </div>
-                                    )}
-
-
-
 
 
                                 </div>
@@ -1784,7 +1492,7 @@ export default function Booking() {
                                 <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider">Date</th>
                                 <th className="px-2 py-3 text-sm font-bold text-white uppercase tracking-wider text-center">Time</th>
                                 <th className="px-6 py-3 text-left text-sm font-bold text-white uppercase tracking-wider">Org/Dept</th>
-                                <th className="px-6 py-2 text-left text-sm font-bold text-white uppercase tracking-wider">Equipment</th>
+                                {/* <th className="px-6 py-2 text-left text-sm font-bold text-white uppercase tracking-wider">Equipment</th> */}
                                 <th className="px-6 py-2 text-left text-sm font-bold text-white uppercase tracking-wider">Type</th>
                                 <th className="px-6 py-2 text-left text-sm font-bold text-white uppercase tracking-wider">Booker</th>
                                 {showRequesterInfo && (
@@ -1840,7 +1548,9 @@ export default function Booking() {
                                             {/* DEBUG USER ROLE AND ID AND BOOKING ID */}
                                             {/* <td>{b.creator_id + currentUserId + currentUserRole}</td> */}
                                             {/*  */}
-                                            <td className="px-6 py-4 whitespace-nowrap">{b.event_facility || b.facility || '-'}</td>
+                                            <td>
+                                                {facilityMap[String(b.event_facility)] || 'Unknown Facility'}
+                                            </td>
                                             {/*  */}
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 {(() => {
@@ -1891,18 +1601,7 @@ export default function Booking() {
                                                 )
                                             }
 
-                                            {/* <td className="px-6 py-4 whitespace-nowrap">{b.organization || b.org || '-'}</td> */}
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                                {equipmentMap[b.id]?.length > 0 ? (
-                                                    <ul className="list-disc list-inside space-y-1">
-                                                        {equipmentMap[b.id].map((item, idx) => (
-                                                            <li key={idx}>{item.quantity}x {item.type}</li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    <span className="text-gray-400 italic">No equipment</span>
-                                                )}
-                                            </td>
+
                                             <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={(e) => e.stopPropagation()}>
                                                 {editReservationId === b.id ? (
                                                     <select
@@ -2156,7 +1855,7 @@ export default function Booking() {
                                                     value={booking.contact} />
                                             </div>
 
-                                            <div className="mt-8">
+                                            {/* <div className="mt-8">
                                                 <div className="flex items-center gap-2 mb-3 text-gray-800 font-semibold">
                                                     <Wrench size={20} />
                                                     Equipment
@@ -2179,7 +1878,7 @@ export default function Booking() {
                                                         No equipment booked
                                                     </p>
                                                 )}
-                                            </div>
+                                            </div> */}
                                         </section>
 
                                         {/* RIGHT — VEHICLES + ACTIONS */}
@@ -2189,20 +1888,6 @@ export default function Booking() {
                                             <div className="mt-8">
                                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Vehicles</h3>
 
-                                                {/* All vehicles from referenceVehicleMap
-                                                {referenceVehicleMap[selectedBooking.id]?.length > 0 ? (
-                                                    <ul className="list-disc list-inside">
-                                                        {referenceVehicleMap[selectedBooking.id].map((v, idx) => (
-                                                            <li key={idx}>
-                                                                Vehicle ID: {v.vehicle_id}, Requestor: {v.requestor}, Date: {new Date(v.date).toLocaleString()}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    <p className="text-gray-500 italic">No vehicles booked</p>
-                                                )} */}
-
-                                                {/* Matched vehicles cross-referenced with booking */}
                                                 <div className="mt-6">
                                                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Matched Vehicles</h3>
                                                     {selectedBooking?.matchedVehicles?.length > 0 ? (

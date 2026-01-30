@@ -9,25 +9,42 @@ const pool = new Pool({
 
 // GET /api/fetch-booking-conflicts?venue=Gymnasium
 router.get('/', async (req, res) => {
-    const { venue } = req.query;
+    const { facility_id } = req.query;
+
     try {
         let result;
-        if (venue) {
+
+        if (facility_id) {
             result = await pool.query(
-                `SELECT * FROM "Booking"
+                `
+                SELECT *
+                FROM "Booking"
                 WHERE event_facility = $1
                   AND deleted = false
                   AND (status = 'pending' OR status = 'approved')
-                ORDER BY event_date DESC, starting_time DESC`,
-                [venue]
+                ORDER BY event_date DESC, starting_time DESC
+                `,
+                [Number(facility_id)]
             );
         } else {
-            result = await pool.query('SELECT * FROM "Booking" WHERE deleted = false ORDER BY event_date DESC, starting_time DESC');
+            result = await pool.query(
+                `
+                SELECT *
+                FROM "Booking"
+                WHERE deleted = false
+                ORDER BY event_date DESC, starting_time DESC
+                `
+            );
         }
+
         res.json({ success: true, bookings: result.rows });
     } catch (err) {
         console.error('Fetch bookings error:', err);
-        res.status(500).json({ success: false, message: 'Failed to fetch bookings', error: err.message });
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch bookings',
+            error: err.message
+        });
     }
 });
 
