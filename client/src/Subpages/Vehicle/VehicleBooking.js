@@ -45,6 +45,9 @@ export default function VehicleBooking() {
         tomorrow.setDate(tomorrow.getDate() + 1);
         return tomorrow.toISOString().split('T')[0];
     }
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const minDate = tomorrow.toISOString().split('T')[0];
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -707,21 +710,51 @@ export default function VehicleBooking() {
                                     required
                                 /> */}
                                 {form.mode === "single" && (
-                                    <input type="date" name="date" value={form.date} onChange={handleChange} className="border rounded px-3 py-2 w-full" required />
+                                    <input
+                                        type="date"
+                                        name="date"
+                                        min={minDate}
+                                        value={form.date}
+                                        onChange={handleChange}
+                                        className="border rounded px-3 py-2 w-full"
+                                        required
+                                    />
                                 )}
 
-                                {form.mode === "specific" && form.specificDates.map((d, i) => (
-                                    <input key={i} type="date" value={d} onChange={(e) => {
-                                        const newDates = [...form.specificDates];
-                                        newDates[i] = e.target.value;
-                                        setForm({ ...form, specificDates: newDates });
-                                    }} className="border rounded px-3 py-2 w-full" />
-                                ))}
+                                {form.mode === "specific" &&
+                                    form.specificDates.map((d, i) => (
+                                        <input
+                                            key={i}
+                                            type="date"
+                                            min={minDate}
+                                            value={d}
+                                            onChange={(e) => {
+                                                const newDates = [...form.specificDates];
+                                                newDates[i] = e.target.value;
+                                                setForm({ ...form, specificDates: newDates });
+                                            }}
+                                            className="border rounded px-3 py-2 w-full"
+                                        />
+                                    ))}
 
                                 {form.mode === "range" && (
                                     <div className="flex gap-2">
-                                        <input type="date" name="rangeStart" value={form.rangeStart} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
-                                        <input type="date" name="rangeEnd" value={form.rangeEnd} onChange={handleChange} className="border rounded px-3 py-2 w-full" />
+                                        <input
+                                            type="date"
+                                            name="rangeStart"
+                                            min={minDate}
+                                            value={form.rangeStart}
+                                            onChange={handleChange}
+                                            className="border rounded px-3 py-2 w-full"
+                                        />
+                                        <input
+                                            type="date"
+                                            name="rangeEnd"
+                                            min={form.rangeStart || minDate}
+                                            value={form.rangeEnd}
+                                            onChange={handleChange}
+                                            className="border rounded px-3 py-2 w-full"
+                                        />
                                     </div>
                                 )}
 

@@ -12,9 +12,28 @@ router.get('/:id', async (req, res) => {
 
     try {
         const result = await pool.query(
-            'SELECT id, name, affiliation, role, email FROM "User" WHERE id = $1',
+            `
+  SELECT
+    u.id,
+    u.name,
+    u.role,
+    u.email,
+
+    -- Fallback if affiliation is invalid or missing
+    COALESCE(a.meaning, 'CJC') AS affiliation
+
+  FROM "User" u
+  LEFT JOIN "Affiliations" a
+    ON LOWER(TRIM(a.abbreviation)) = LOWER(TRIM(u.affiliation))
+   AND a.enabled = true
+
+  WHERE u.id = $1
+    AND u.deleted = false
+  `,
             [id]
         );
+
+
 
         if (result.rows.length > 0) {
             res.json({ success: true, user: result.rows[0] });

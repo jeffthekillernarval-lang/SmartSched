@@ -393,7 +393,14 @@ export default function Booking() {
         dateFrom: '',
         dateTo: ''
     });
-
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentValue, setPaymentValue] = useState(0);
+    const [editingPaymentBookingId, setEditingPaymentBookingId] = useState(null);
+    const openPaymentModal = (booking) => {
+        setEditingPaymentBookingId(booking.id);
+        setPaymentValue(booking.booking_fee ?? 0);
+        setShowPaymentModal(true);
+    };
     useEffect(() => {
         const storedUserId = localStorage.getItem('currentUserId');
         const storedUserRole = localStorage.getItem('currentUserRole');
@@ -1794,13 +1801,22 @@ export default function Booking() {
                                                         </svg>
                                                     </button>
                                                 }
+                                                <ActionButton
+                                                    label="Payment"
+                                                    variant="warning"
+                                                    onClick={() => {
+                                                        setEditingPaymentBookingId(booking.id);
+                                                        setPaymentValue(booking.booking_fee ?? 0);
+                                                        setShowPaymentModal(true);
+                                                    }}
+                                                />
                                             </td>
                                         </tr>
                                     </React.Fragment>
                                 )))}
                         </tbody>
                     </table>
-                    <div
+                    <   div
                         id="booking-summary-content"
                         className="relative w-[95vw] max-w-6xl bg-white rounded-2xl shadow-xl"
                     >
@@ -1914,40 +1930,7 @@ export default function Booking() {
 
 
                                             {/* Actions */}
-                                            <div>
-                                                <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                                                    <Settings size={20} />
-                                                    Actions
-                                                </h3>
 
-                                                <div className="space-y-6">
-
-                                                    {/* Facility Actions */}
-                                                    <div>
-                                                        <p className="font-medium text-gray-700 mb-2">
-                                                            Facility Booking
-                                                        </p>
-                                                        <div className="flex gap-2">
-                                                            <ActionButton label="Edit" />
-                                                            <ActionButton label="Cancel" variant="warning" />
-                                                            <ActionButton label="Delete" variant="danger" />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Vehicle Actions */}
-                                                    <div>
-                                                        <p className="font-medium text-gray-700 mb-2">
-                                                            Vehicle Booking
-                                                        </p>
-                                                        <div className="flex gap-2">
-                                                            <ActionButton label="Edit" disabled={!vehicles.length} />
-                                                            <ActionButton label="Cancel" variant="warning" disabled={!vehicles.length} />
-                                                            <ActionButton label="Delete" variant="danger" disabled={!vehicles.length} />
-                                                        </div>
-                                                    </div>
-
-                                                </div>
-                                            </div>
 
                                         </section>
                                     </div>
@@ -1970,7 +1953,10 @@ export default function Booking() {
                                 </div>
                             </div>
                         )}
+
+
                     </div>
+
                 </div>
                 {/* Pagination Controls & Rows Per Page - Centered at bottom */}
                 {totalPages > 1 || filtered.length > 0 ? (
@@ -2016,7 +2002,85 @@ export default function Booking() {
                         )}
                     </div>
                 ) : null}
+                {
+                    showPaymentModal && (
+                        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                            <div className="bg-white rounded-xl w-[400px] p-6 shadow-lg">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-lg font-bold text-[#96161C]">Edit Payment</h2>
+                                    <button onClick={() => setShowPaymentModal(false)}>
+                                        <X />
+                                    </button>
+                                </div>
+
+                                <form onSubmit={async (e) => {
+                                    e.preventDefault();
+
+                                    try {
+                                        const res = await fetch(
+                                            `http://localhost:5000/api/edit-payment-facility/${editingPaymentBookingId}`,
+                                            {
+                                                method: 'PUT',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ booking_fee: Number(paymentValue) }),
+                                            }
+                                        );
+
+                                        const data = await res.json();
+
+                                        if (data.success) {
+                                            setBookings(prev =>
+                                                prev.map(b =>
+                                                    b.id === editingPaymentBookingId
+                                                        ? { ...b, booking_fee: data.booking.booking_fee }
+                                                        : b
+                                                )
+                                            );
+                                            setShowPaymentModal(false);
+                                        } else {
+                                            alert(data.message || 'Failed to update payment');
+                                        }
+                                    } catch (err) {
+                                        console.error(err);
+                                        alert('Server error');
+                                    }
+                                }}>
+                                    <label className="block text-sm font-medium mb-2">
+                                        Amount (₱)
+                                    </label>
+
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={paymentValue}
+                                        onChange={(e) => setPaymentValue(e.target.value)}
+                                        className="w-full border rounded-lg px-4 py-2 mb-4"
+                                        required
+                                    />
+
+                                    <div className="flex justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPaymentModal(false)}
+                                            className="px-4 py-2 rounded-md bg-gray-200"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="px-4 py-2 rounded-md bg-[#96161C] text-white"
+                                        >
+                                            Save
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )
+                }
             </div>
+            {/* HERE RIGHT? */}
         </div>
     );
 }

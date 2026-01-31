@@ -133,7 +133,7 @@ app.use('/api/vehicle-conflicts', require('./routes/booking/vehicleConflicts'));
 const editPaymentRoute = require('./routes/booking/editPayment');
 app.use('/api/edit-payment', editPaymentRoute);
 
-
+app.use('/api/edit-payment-facility', require('./routes/booking/editPaymentFacility'));
 // CRUDS
 const updateBookingType = require('./routes/booking/updateBookingType');
 app.use('/api/toggle-reservation', updateBookingType);

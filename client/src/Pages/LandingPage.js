@@ -248,7 +248,7 @@ export default function LandingPage() {
                     {isSidebarOpen && (
                         <>
                             <div className="text-lg font-bold text-white">{user?.name || 'User'}</div>
-                            <div className="text-sm font-bold text-[#ffa7a7] tracking-widest">{user?.affiliation || ''}</div>
+                            <div className="text-sm font-bold text-[#ffa7a7] tracking-widest">{user?.affiliation || 'NA'}</div>
                         </>
                     )}
                 </div>
