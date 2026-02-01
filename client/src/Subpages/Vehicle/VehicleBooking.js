@@ -45,6 +45,26 @@ export default function VehicleBooking() {
         tomorrow.setDate(tomorrow.getDate() + 1);
         return tomorrow.toISOString().split('T')[0];
     }
+    const formatVehicleDatesInline = (dates) => {
+        if (!Array.isArray(dates) || dates.length === 0) return '—';
+
+        const parsed = dates
+            .map(d => new Date(d))
+            .filter(d => !isNaN(d))
+            .sort((a, b) => a - b);
+
+        if (parsed.length === 0) return '—';
+
+        return parsed.length === 1
+            ? parsed[0].toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            })
+            : `${parsed[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${parsed[parsed.length - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            }, ${parsed[0].getFullYear()}`;
+    };
+
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const minDate = tomorrow.toISOString().split('T')[0];
@@ -134,6 +154,27 @@ export default function VehicleBooking() {
         fetchDriversForVehicle();
     }, [form.vehicleId]);
 
+    const formatVehicleDates = (dates) => {
+        if (!Array.isArray(dates) || dates.length === 0) return '—';
+
+        const parsed = dates.map(d => new Date(d)).sort((a, b) => a - b);
+
+        return parsed.length === 1
+            ? parsed[0].toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            })
+            : `${parsed[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${parsed[parsed.length - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            }, ${parsed[0].getFullYear()}`;
+    };
+
+    const getDepartmentName = (booking, affiliations) =>
+        affiliations.find(a => a.id === Number(booking.department_id))
+            ?.abbreviation || 'Unknown Department';
+
+    const getVehicleDetails = (booking, availableVehicles) =>
+        availableVehicles.find(v => v.id === Number(booking.vehicle_id));
 
     const [editingId, setEditingId] = useState(null);
     const downloadReceipt = async (booking) => {
@@ -143,39 +184,93 @@ export default function VehicleBooking() {
         receiptDiv.style.padding = "2rem";
         receiptDiv.style.backgroundColor = "white";
         receiptDiv.style.fontFamily = "Arial, sans-serif";
+        const vehicle = getVehicleDetails(booking, availableVehicles);
+
         receiptDiv.innerHTML = `
-    <h1 style="color:#96161C; text-align:center; margin-bottom:0.2rem;">School Vehicle Booking Receipt</h1>
-    <h2 style="text-align:center; margin-top:0; font-weight:normal; font-size:16px;">
-      ${new Date().toLocaleDateString()}
-    </h2>
+<h1 style="color:#96161C; text-align:center;">School Vehicle Booking Receipt</h1>
+<h3 style="text-align:center; font-weight:normal;">
+  ${new Date().toLocaleDateString()}
+</h3>
 
-    <h3 style="color:#96161C; margin-top:2rem; margin-bottom:0.5rem;">Booking Details</h3>
-    <table style="width:100%; border-collapse: collapse;">
-      <tr><th style="border:1px solid #333; padding:8px;">Vehicle Type</th><td style="border:1px solid #333; padding:8px;">${toTitleCase(booking.vehicleType || booking.vehicle_Type)}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Vehicle Plate</th><td style="border:1px solid #333; padding:8px;">${booking.vehicle_plate || '—'}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Requestor</th><td style="border:1px solid #333; padding:8px;">${toTitleCase(booking.requestor)}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Department</th><td style="border:1px solid #333; padding:8px;">${toTitleCase(booking.department)}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Driver</th><td style="border:1px solid #333; padding:8px;">${booking.driver_name || '—'}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Date</th><td style="border:1px solid #333; padding:8px;">${new Date(booking.event_date || booking.date).toLocaleDateString()}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Purpose</th><td style="border:1px solid #333; padding:8px;">${booking.purpose}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Destination</th><td style="border:1px solid #333; padding:8px;">${booking.destination || '—'}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Departure Time</th><td style="border:1px solid #333; padding:8px;">${booking.departureTime || '—'}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Arrival Time</th><td style="border:1px solid #333; padding:8px;">${booking.arrivalTime || '—'}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">No. of Passengers</th><td style="border:1px solid #333; padding:8px;">${booking.passengers || '—'}</td></tr>
-      <tr><th style="border:1px solid #333; padding:8px;">Payment</th><td style="border:1px solid #333; padding:8px;">${booking.payment ? `₱${booking.payment}` : '—'}</td></tr>
-    </table>
+<h3 style="color:#96161C; margin-top:2rem;">Booking Details</h3>
 
-    <div style="display:flex; justify-content:space-between; margin-top:3rem;">
-      <div style="text-align:center; width:45%;">
-        <p>School President</p>
-        <div style="border-top:1px solid #333; margin-top:2rem;"></div>
-      </div>
-      <div style="text-align:center; width:45%;">
-        <p>Driver</p>
-        <div style="border-top:1px solid #333; margin-top:2rem;"></div>
-      </div>
-    </div>
-  `;
+<table style="width:100%; border-collapse: collapse;">
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Vehicle Type</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${vehicle ? vehicle.vehicle_name : 'Unknown Vehicle'}
+    </td>
+  </tr>
+
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Vehicle Plate</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${vehicle?.plate_number || '—'}
+    </td>
+  </tr>
+
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Requestor</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${booking.requestor}
+    </td>
+  </tr>
+
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Department</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${getDepartmentName(booking, affiliations)}
+    </td>
+  </tr>
+
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Driver</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${booking.driver_name || '—'}
+    </td>
+  </tr>
+
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Date</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${formatVehicleDates(booking.dates)}
+    </td>
+  </tr>
+
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Purpose</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${booking.purpose}
+    </td>
+  </tr>
+
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Destination</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${booking.destination}
+    </td>
+  </tr>
+
+  <tr>
+    <th style="border:1px solid #333; padding:8px;">Payment</th>
+    <td style="border:1px solid #333; padding:8px;">
+      ${booking.payment ? `₱${booking.payment}` : '—'}
+    </td>
+  </tr>
+</table>
+
+<div style="display:flex; justify-content:space-between; margin-top:3rem;">
+  <div style="text-align:center; width:45%;">
+    <div style="border-top:1px solid #333; margin-top:2rem;"></div>
+    <p>Requested By</p>
+  </div>
+
+  <div style="text-align:center; width:45%;">
+    <div style="border-top:1px solid #333; margin-top:2rem;"></div>
+    <p>Approved By</p>
+  </div>
+</div>
+`;
 
         document.body.appendChild(receiptDiv);
 
@@ -986,7 +1081,9 @@ export default function VehicleBooking() {
                             ).map((b, index) => {
                                 const bookingVehicleId = Number(b.vehicle_id);
                                 const hasPivotAccess = userVehicleIds.includes(bookingVehicleId);
-
+                                const vehicle = availableVehicles.find(
+                                    v => v.id === Number(b.vehicle_id)
+                                );
                                 return (
                                     <React.Fragment key={index}>
                                         <tr
@@ -1244,12 +1341,17 @@ export default function VehicleBooking() {
 
                                                         {/* Booking Details */}
                                                         <div className="space-y-2">
-                                                            <p><strong>Vehicle Type:</strong> {toTitleCase(b.vehicleType || b.vehicle_Type)}</p>
+                                                            <p><strong>Vehicle Type:</strong> {vehicle?.vehicle_name || 'Unknown Vehicle'}</p>
                                                             <p><strong>Requestor:</strong> {toTitleCase(b.requestor)}</p>
-                                                            <p><strong>Department:</strong> {toTitleCase(b.department)}</p>
-                                                            <p><strong>Date:</strong> {new Date(b.event_date || b.date).toLocaleDateString()}</p>
+                                                            <p>
+                                                                <strong>Department:</strong>{" "}
+                                                                {affiliations.find(a => a.id === Number(b.department_id))
+                                                                    ?.abbreviation || '—'}
+                                                            </p>
+                                                            <p><strong>Date:</strong> {formatVehicleDatesInline(b.dates)}</p>
                                                             <p><strong>Purpose:</strong> {b.purpose}</p>
                                                         </div>
+
 
                                                         {/* Download Receipt */}
                                                         <div className="flex items-center gap-2">

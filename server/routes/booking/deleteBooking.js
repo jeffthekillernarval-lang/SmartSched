@@ -6,27 +6,41 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 
-// PUT /api/delete-booking/:id
-router.put('/:id', async (req, res) => {
-    const bookingId = req.params.id;
+// DELETE /api/delete-booking/:id
+router.delete('/:id', async (req, res) => {
+    const bookingId = Number(req.params.id);
+
+    if (!Number.isInteger(bookingId)) {
+        return res.status(400).json({
+            success: false,
+            message: 'Invalid booking ID',
+        });
+    }
 
     try {
         const result = await pool.query(
-            `UPDATE "Booking"
-             SET deleted = true
+            `DELETE FROM "Booking"
              WHERE id = $1`,
             [bookingId]
         );
-        console.log('Delete this fcking booking');
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ success: false, message: 'Booking not found' });
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found',
+            });
         }
 
-        res.json({ success: true, message: 'Booking deleted (soft) successfully' });
+        res.json({
+            success: true,
+            message: 'Booking permanently deleted',
+        });
     } catch (err) {
         console.error('Delete booking error:', err);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+        });
     }
 });
 

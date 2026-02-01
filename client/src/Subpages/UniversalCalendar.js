@@ -12,6 +12,8 @@ export default function UniversalCalendar() {
         facility: true,
         equipment: true
     });
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [showEventModal, setShowEventModal] = useState(false);
 
     /* =========================
        FETCH ALL SOURCES
@@ -155,6 +157,75 @@ export default function UniversalCalendar() {
                     Equipment
                 </label>
             </div>
+            {showEventModal && selectedEvent && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-11/12 max-w-xl p-6 relative">
+
+                        <button
+                            onClick={() => setShowEventModal(false)}
+                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-900"
+                        >
+                            ✕
+                        </button>
+
+                        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                            {selectedEvent.title}
+                        </h2>
+
+                        {/* ===== VEHICLE ===== */}
+                        {selectedEvent.extendedProps.source === 'vehicle' && (
+                            <div className="space-y-2 text-gray-700">
+                                <p><strong>Requestor:</strong> {selectedEvent.extendedProps.requestor}</p>
+                                <p><strong>Department:</strong> {selectedEvent.extendedProps.department}</p>
+                                <p><strong>Purpose:</strong> {selectedEvent.extendedProps.purpose}</p>
+                                <p><strong>Date:</strong> {new Date(selectedEvent.start).toLocaleDateString()}</p>
+                                {selectedEvent.extendedProps.destination && (
+                                    <p><strong>Destination:</strong> {selectedEvent.extendedProps.destination}</p>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ===== FACILITY ===== */}
+                        {selectedEvent.extendedProps.source === 'facility' && (
+                            <div className="space-y-2 text-gray-700">
+                                <p><strong>Facility:</strong> {selectedEvent.extendedProps.event_facility}</p>
+                                <p><strong>Event:</strong> {selectedEvent.extendedProps.event_name}</p>
+                                <p><strong>Status:</strong> {selectedEvent.extendedProps.status}</p>
+                                <p>
+                                    <strong>Time:</strong>{" "}
+                                    {selectedEvent.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {" – "}
+                                    {selectedEvent.end?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            </div>
+                        )}
+
+                        {/* ===== EQUIPMENT ===== */}
+                        {selectedEvent.extendedProps.source === 'equipment' && (
+                            <div className="space-y-2 text-gray-700">
+                                <p><strong>Equipment ID:</strong> {selectedEvent.extendedProps.equipment_type_id}</p>
+                                <p><strong>Date:</strong> {new Date(selectedEvent.start).toLocaleDateString()}</p>
+                                <p>
+                                    <strong>Time:</strong>{" "}
+                                    {selectedEvent.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    {" – "}
+                                    {selectedEvent.end?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="mt-6 flex justify-end">
+                            <button
+                                onClick={() => setShowEventModal(false)}
+                                className="bg-gray-200 px-4 py-2 rounded-lg font-semibold hover:bg-gray-300"
+                            >
+                                Close
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )}
 
             {/* CALENDAR */}
             <FullCalendar
@@ -168,8 +239,10 @@ export default function UniversalCalendar() {
                 events={visibleEvents}
                 eventClick={(info) => {
                     info.jsEvent.preventDefault();
-                    console.log("Clicked:", info.event.extendedProps);
+                    setSelectedEvent(info.event);
+                    setShowEventModal(true);
                 }}
+
             />
         </div>
     );

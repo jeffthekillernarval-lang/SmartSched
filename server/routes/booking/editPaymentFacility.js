@@ -8,14 +8,14 @@ const pool = new Pool({
 });
 
 /**
- * UPDATE vehicle booking payment
- * PUT /api/edit-payment/:id
+ * UPDATE facility booking payment
+ * PUT /api/edit-facility-payment/:id
  */
 router.put('/:id', async (req, res) => {
     const bookingId = Number(req.params.id);
-    const { payment } = req.body;
+    const { booking_fee } = req.body;
 
-    // 🔒 Basic validation
+    // 🔒 Validation
     if (!Number.isInteger(bookingId)) {
         return res.status(400).json({
             success: false,
@@ -23,7 +23,7 @@ router.put('/:id', async (req, res) => {
         });
     }
 
-    if (!Number.isFinite(payment) || payment < 0) {
+    if (!Number.isFinite(booking_fee) || booking_fee < 0) {
         return res.status(400).json({
             success: false,
             message: 'Invalid payment amount',
@@ -33,12 +33,12 @@ router.put('/:id', async (req, res) => {
     try {
         const result = await pool.query(
             `
-      UPDATE "VehicleBookings"
-      SET payment = $1
-      WHERE id = $2
-      RETURNING *
-      `,
-            [payment, bookingId]
+            UPDATE "Booking"
+            SET booking_fee = $1
+            WHERE id = $2
+            RETURNING *
+            `,
+            [booking_fee, bookingId]
         );
 
         if (result.rows.length === 0) {
@@ -53,7 +53,7 @@ router.put('/:id', async (req, res) => {
             booking: result.rows[0],
         });
     } catch (err) {
-        console.error('Edit payment error:', err);
+        console.error('Edit facility payment error:', err);
         res.status(500).json({
             success: false,
             message: 'Failed to update payment',

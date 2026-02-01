@@ -16,7 +16,11 @@ import {
     Phone,
     Wrench,
     Car,
-    Settings
+    Settings,
+    XCircle,
+    CreditCard,
+    Pencil,
+    Trash2
 } from "lucide-react";
 function formatTime(timeStr) {
     if (!timeStr) return '';
@@ -71,6 +75,10 @@ export default function Booking() {
         });
         return map;
     }, [facilitiesList]);
+    const hasFacilityAccess = (booking) => {
+        const facilityId = String(booking.event_facility ?? '');
+        return userFacilityIds.includes(facilityId);
+    };
     useEffect(() => {
         if (!userId) return;
 
@@ -94,27 +102,21 @@ export default function Booking() {
     useEffect(() => {
         if (!bookings.length || !userFacilityIds.length) return;
 
-        console.group("FACILITY BOOKINGS — PIVOT CHECK");
-        console.log("User ID:", userId);
+        console.group("FACILITY BOOKINGS — PIVOT CHECK (ID-BASED)");
         console.log("Facilities in Pivot (IDs):", userFacilityIds);
         console.log("--------------------------------");
 
         bookings.forEach((booking, index) => {
-            // 🔑 ALWAYS compare by ID
-            const bookingFacilityId = String(
-                booking.facility_id || booking.facility || ""
-            );
-
-            const bookingFacilityName = String(
-                booking.event_facility || "UNKNOWN NAME"
-            );
+            // booking.event_facility IS AN ID
+            const bookingFacilityId = String(booking.event_facility ?? '');
 
             const inPivot = userFacilityIds.includes(bookingFacilityId);
 
             console.group(`Booking #${index + 1}`);
             console.log("Booking Facility ID:", bookingFacilityId);
             console.log(
-                `Booking Facility NAME: ${bookingFacilityName} (ID: ${bookingFacilityId})`
+                "Booking Facility NAME:",
+                facilityMap[bookingFacilityId] || "UNKNOWN"
             );
 
             if (inPivot) {
@@ -129,63 +131,126 @@ export default function Booking() {
 
         console.log("--------------------------------");
         console.groupEnd();
-    }, [bookings, userFacilityIds, userId]);
+    }, [bookings, userFacilityIds, facilityMap]);
+
 
 
     const [schedules, setSchedules] = useState([
         { date: '' || null, startTime: '' || null, endTime: '' || null }
     ]);
+    // ===== Helpers (keep as-is) =====
+    const getFacilityName = (booking, facilityMap) =>
+        facilityMap?.[String(booking.event_facility)] || 'Unknown Facility';
 
+    const getOrganizationName = (booking, affiliations) =>
+        affiliations.find(a => a.id === Number(booking.organization))
+            ?.abbreviation || 'Unknown Organization';
+
+    const formatDisplayDate = (date) =>
+        date
+            ? new Date(date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            })
+            : '';
+
+    const formatDisplayTime = (start, end, formatTime) =>
+        start && end ? `${formatTime(start)} – ${formatTime(end)}` : '';
+
+
+    // ===== DOWNLOAD RECEIPT =====
     const downloadReceipt = () => {
         if (!booking) return;
 
         const doc = new jsPDF("p", "mm", "a4");
-        const left = 15; // left margin
-        let y = 20; // starting vertical position
+        const left = 15;
+        let y = 20;
 
+        // Title
         doc.setFontSize(18);
         doc.text("Facility & Vehicle Booking Receipt", 105, y, { align: "center" });
-        y += 10;
+        y += 12;
 
         doc.setFontSize(12);
-        doc.text(`Event: ${booking.event_name || booking.title}`, left, y);
-        y += 8;
-        doc.text(`Facility: ${booking.event_facility || booking.facility}`, left, y);
-        y += 8;
-        doc.text(`Organization: ${booking.organization || booking.org}`, left, y);
-        y += 8;
-        doc.text(`Requested By: ${booking.requested_by || booking.requestedBy}`, left, y);
-        y += 8;
-        doc.text(`Contact: ${booking.contact}`, left, y);
-        y += 8;
-        doc.text(`Date: ${booking.event_date || booking.date}`, left, y);
-        y += 8;
-        doc.text(`Time: ${booking.starting_time || booking.start} – ${booking.ending_time || booking.end}`, left, y);
-        y += 15;
 
-        // Vehicles
-        if (vehicles.length > 0) {
+        // Booking Details
+        doc.text(`Event: ${booking.event_name || booking.title || '—'}`, left, y);
+        y += 8;
+
+        doc.text(
+            `Facility: ${getFacilityName(booking, facilityMap)}`,
+            left,
+            y
+        );
+        y += 8;
+
+        doc.text(
+            `Organization: ${getOrganizationName(booking, affiliations)}`,
+            left,
+            y
+        );
+        y += 8;
+
+        doc.text(
+            `Requested By: ${booking.requested_by || booking.requestedBy || '—'}`,
+            left,
+            y
+        );
+        y += 8;
+
+        doc.text(`Contact: ${booking.contact || '—'}`, left, y);
+        y += 8;
+
+        doc.text(
+            `Date: ${formatDisplayDate(booking.event_date || booking.date)}`,
+            left,
+            y
+        );
+        y += 8;
+
+        doc.text(
+            `Time: ${formatDisplayTime(
+                booking.starting_time || booking.start,
+                booking.ending_time || booking.end,
+                formatTime
+            )}`,
+            left,
+            y
+        );
+        y += 12;
+
+        // Vehicle section (optional)
+        if (Array.isArray(vehicles) && vehicles.length > 0) {
             doc.setFontSize(14);
             doc.text("Vehicle Reservations:", left, y);
             y += 8;
+
             doc.setFontSize(12);
             vehicles.forEach((v, idx) => {
-                doc.text(`${idx + 1}. ${v.vehicle_type || "Unknown"} - ${v.plate_number || "N/A"}`, left + 5, y);
+                doc.text(
+                    `${idx + 1}. ${v.vehicle_type || 'Unknown Vehicle'} – ${v.plate_number || 'N/A'}`,
+                    left + 5,
+                    y
+                );
                 y += 7;
             });
+
             y += 5;
         }
 
-
+        // Signatures
         y += 10;
         doc.text("__________________________", left, y);
         doc.text("Requested By", left, y + 6);
+
         doc.text("__________________________", 130, y);
         doc.text("Approved By (President)", 130, y + 6);
 
-        // Save PDF
+        // Save
         doc.save(`${booking.event_name || "booking"}-receipt.pdf`);
     };
+
 
     const booking = selectedBooking ?? null;
     const bookingId = booking?.id ?? null;
@@ -572,73 +637,43 @@ export default function Booking() {
 
         let isConflict = false;
 
-        /* ===============================
-           CONFLICT CHECK (CREATE ONLY)
-        =============================== */
-        if (!editingId) {
-            try {
+        try {
+            for (const s of schedules) {
+                const params = new URLSearchParams({
+                    facility_id: form.facility,
+                    event_date: s.date,
+                    start_time: s.startTime,
+                    end_time: s.endTime,
+                });
+
+                if (editingId) {
+                    params.append('exclude_id', editingId);
+                }
+
                 const res = await fetch(
-                    `http://localhost:5000/api/fetch-booking-conflicts?facility_id=${encodeURIComponent(form.facility)}`
+                    `http://localhost:5000/api/fetch-booking-conflicts?${params.toString()}`
                 );
 
                 const data = await res.json();
 
-                if (data.success && Array.isArray(data.bookings)) {
-                    const toMinutes = (time) => {
-                        const [h, m] = time.split(':').map(Number);
-                        return h * 60 + m;
-                    };
+                if (data.success && data.conflicts.length > 0) {
+                    const conflict = data.conflicts[0];
 
-                    const isTimeOverlap = (aStart, aEnd, bStart, bEnd) => {
-                        const aS = toMinutes(aStart);
-                        const aE = toMinutes(aEnd);
-                        const bS = toMinutes(bStart);
-                        const bE = toMinutes(bEnd);
+                    alert(
+                        `Conflict detected!\n\n` +
+                        `Event: ${conflict.event_name}\n` +
+                        `Date: ${conflict.event_date.split('T')[0]}\n` +
+                        `Time: ${conflict.starting_time} - ${conflict.ending_time}`
+                    );
 
-                        return aS < bE && aE > bS;
-                    };
-
-
-                    for (const newSchedule of schedules) {
-                        for (const existing of data.bookings) {
-                            const existingDate = (existing.event_date || '').split('T')[0];
-
-                            if (existingDate === newSchedule.date) {
-                                if (
-                                    isTimeOverlap(
-                                        newSchedule.startTime,
-                                        newSchedule.endTime,
-                                        existing.starting_time,
-                                        existing.ending_time
-                                    )
-                                ) {
-                                    isConflict = true;
-                                    conflictingBooking = existing;
-                                    break;
-                                }
-                            }
-                        }
-                        if (isConflict) break;
-                    }
+                    return; // ⛔ STOP SUBMIT
                 }
-            } catch (err) {
-                console.error('Conflict check error:', err);
             }
-
-            if (isConflict) {
-                alert(
-                    `Conflict detected!\n\n` +
-                    `Event: ${conflictingBooking.event_name}\n` +
-                    `Date: ${conflictingBooking.event_date.split('T')[0]}\n` +
-                    `Time: ${conflictingBooking.starting_time} - ${conflictingBooking.ending_time}`
-                );
-                return;
-            }
+        } catch (err) {
+            console.error('Conflict check failed:', err);
+            alert('Failed to check booking conflicts');
+            return;
         }
-
-        /* ===============================
-           EQUIPMENT VALIDATION
-        // =============================== */
 
         /* ===============================
            CREATE / UPDATE BOOKING
@@ -678,11 +713,11 @@ export default function Booking() {
                SAFETY CHECK
             =============================== */
 
-            if (!Array.isArray(data.bookings) || data.bookings.length === 0) {
-                console.error('Missing booking IDs:', data);
-                alert('Booking saved, but equipment could not be attached.');
-                return;
-            }
+            // if (!Array.isArray(data.bookings) || data.bookings.length === 0) {
+            //     console.error('Missing booking IDs:', data);
+            //     alert('Booking saved, but equipment could not be attached.');
+            //     return;
+            // }
 
 
             /* ===============================
@@ -738,7 +773,7 @@ export default function Booking() {
 
 
 
-    const ActionButton = ({ label, variant = "default", disabled }) => {
+    const ActionButton = ({ label, variant = "default", disabled, onClick }) => {
         const base = "px-4 py-1.5 rounded-md text-sm font-medium transition focus:outline-none";
         const styles = {
             default: "bg-blue-100 text-blue-800 hover:bg-blue-200",
@@ -764,12 +799,12 @@ export default function Booking() {
 
         try {
             const res = await fetch(`http://localhost:5000/api/delete-booking/${id}`, {
-                method: 'PUT'
+                method: 'DELETE'
             });
             const data = await res.json();
 
             if (data.success) {
-                alert('Booking marked as deleted');
+                alert('Booking is permanently deleted');
                 // Refetch your bookings or remove from state
                 window.location.reload(); // <-- reloads the page
                 return;
@@ -813,35 +848,55 @@ export default function Booking() {
     };
 
     const handleEdit = (booking) => {
-        console.log('Editing booking:', booking); // Debugging: Check the booking object
-        console.log('Schedules before mapping:', booking.schedules); // Debugging: Check the schedules field
+        console.log('Editing booking:', booking);
+        console.log('Schedules before mapping:', booking.schedules);
 
         setEditingId(booking.id);
 
-        const bookingSchedules = (booking.schedules || []).map((schedule) => ({
-            date: schedule.date || '', // Ensure date is not undefined
-            startTime: schedule.startTime || '', // Ensure startTime is not undefined
-            endTime: schedule.endTime || '', // Ensure endTime is not undefined
-        }));
+        let bookingSchedules = [];
 
-        console.log('Mapped schedules:', bookingSchedules); // Debugging: Check the mapped schedules
+        if (Array.isArray(booking.schedules) && booking.schedules.length > 0) {
+            // ✅ Newer bookings with schedules array
+            bookingSchedules = booking.schedules.map((s) => ({
+                date: s.date || '',
+                startTime: s.startTime || s.starting_time || '',
+                endTime: s.endTime || s.ending_time || '',
+            }));
+        } else {
+            // ✅ Fallback for old bookings (MOST IMPORTANT PART)
+            bookingSchedules = [
+                {
+                    date: booking.event_date
+                        ? booking.event_date.split('T')[0]
+                        : getTomorrowDate(),
+                    startTime: booking.starting_time || '',
+                    endTime: booking.ending_time || '',
+                },
+            ];
+        }
+
+        console.log('Mapped schedules:', bookingSchedules);
 
         setSchedules(bookingSchedules);
 
         setForm({
             title: booking.event_name || '',
-            facility: String(booking.event_facility), // 🔑 ID
+            facility: String(booking.event_facility), // facility ID
             requestedBy: booking.requested_by || '',
             org: booking.organization || '',
             contact: booking.contact || '',
             bookingType: booking.reservation ? 'reservation' : 'booking',
-            insider: booking.insider || 'student',
-            booking_fee: booking.booking_fee ?? 0
+            insider:
+                booking.insider === false
+                    ? 'outsider'
+                    : booking.insider || 'student',
+            booking_fee: booking.booking_fee ?? 0,
         });
 
         setShowForm(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
 
 
 
@@ -874,12 +929,11 @@ export default function Booking() {
     };
 
 
-    function getTomorrowDate() {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        return tomorrow.toISOString().split('T')[0];
-    }
-
+    const getTomorrowDate = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split('T')[0];
+    };
     function calculateMinEndTime(startTime) {
         if (!startTime) return "06:00";
 
@@ -973,34 +1027,34 @@ export default function Booking() {
         }
     };
 
-    const [relatedVehicleBookings, setRelatedVehicleBookings] = useState({});
+    // const [relatedVehicleBookings, setRelatedVehicleBookings] = useState({});
 
-    const fetchRelatedVehicleBookings = async (facilityBooking) => {
-        try {
-            const res = await fetch(
-                `http://localhost:5000/api/related-vehicle-bookings?date=${encodeURIComponent(facilityBooking.date)}&purpose=${encodeURIComponent(facilityBooking.event_name || facilityBooking.title)}&requestor=${encodeURIComponent(facilityBooking.requested_by || facilityBooking.requestedBy)}`
-            );
-            const data = await res.json();
+    // const fetchRelatedVehicleBookings = async (facilityBooking) => {
+    //     try {
+    //         const res = await fetch(
+    //             `http://localhost:5000/api/related-vehicle-bookings?date=${encodeURIComponent(facilityBooking.date)}&purpose=${encodeURIComponent(facilityBooking.event_name || facilityBooking.title)}&requestor=${encodeURIComponent(facilityBooking.requested_by || facilityBooking.requestedBy)}`
+    //         );
+    //         const data = await res.json();
 
-            if (data.success) {
-                setRelatedVehicleBookings((prev) => ({
-                    ...prev,
-                    [facilityBooking.id]: data.vehicleBookings
-                }));
-            } else {
-                console.error('Failed to fetch related vehicle bookings:', data.message);
-            }
-        } catch (err) {
-            console.error('Error fetching related vehicle bookings:', err);
-        }
-    };
+    //         if (data.success) {
+    //             setRelatedVehicleBookings((prev) => ({
+    //                 ...prev,
+    //                 [facilityBooking.id]: data.vehicleBookings
+    //             }));
+    //         } else {
+    //             console.error('Failed to fetch related vehicle bookings:', data.message);
+    //         }
+    //     } catch (err) {
+    //         console.error('Error fetching related vehicle bookings:', err);
+    //     }
+    // };
 
-    // Fetch related vehicle bookings for all facility bookings
-    useEffect(() => {
-        bookings.forEach((booking) => {
-            fetchRelatedVehicleBookings(booking);
-        });
-    }, [bookings]);
+    // // Fetch related vehicle bookings for all facility bookings
+    // useEffect(() => {
+    //     bookings.forEach((booking) => {
+    //         fetchRelatedVehicleBookings(booking);
+    //     });
+    // }, [bookings]);
 
     return (
         <div className="w-full">
@@ -1518,60 +1572,53 @@ export default function Booking() {
                         <tbody className="divide-y divide-gray-100">
                             {paginated.length === 0 ? (
                                 <tr>
-                                    <td colSpan={8} className="text-center py-8 text-gray-500">No bookings found.</td>
+                                    <td colSpan={8} className="text-center py-8 text-gray-500">
+                                        No bookings found.
+                                    </td>
                                 </tr>
                             ) : (
-                                paginated.map((b, idx) => (
-                                    <React.Fragment key={b.id || idx}>
+                                paginated.map((b, idx) => {
+                                    const inPivot = hasFacilityAccess(b);
+
+                                    return (
                                         <tr
-                                            className={`transition hover:bg-[#f8eaea] cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fde8e8]'}`}
+                                            key={b.id}
+                                            className={`transition hover:bg-[#f8eaea] cursor-pointer ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fde8e8]'
+                                                }`}
                                             onClick={() => {
-                                                setSelectedBooking(b);      // set the booking
-                                                setShowBookingSummary(true); // show modal
+                                                if (!inPivot) return;
+                                                setSelectedBooking(b);
+                                                setShowBookingSummary(true);
                                             }}
                                         >
-
-                                            {/*  */}
-
                                             {/* CHECK USER ROLE */}
-                                            {UserisNotAdmin ?
-                                                // TRUE
-                                                // USER IS NOT ADMIN
-                                                ((parseInt(b.creator_id) === parseInt(currentUserId)) ?
-                                                    // USER'S OWN BOOKING
-                                                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#a31d23]" >{b.event_name || b.title}</td>
-                                                    :
-                                                    // OTHER USER ANONYMOUS BOOKINGS
-                                                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#daa7aa]" >Hidden</td>
+                                            {UserisNotAdmin ? (
+                                                parseInt(b.creator_id) === parseInt(currentUserId) ? (
+                                                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#a31d23]">
+                                                        {b.event_name || b.title}
+                                                    </td>
+                                                ) : (
+                                                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#daa7aa]">
+                                                        Hidden
+                                                    </td>
                                                 )
+                                            ) : (
+                                                <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#a31d23]">
+                                                    {b.event_name || b.title}
+                                                </td>
+                                            )}
 
-
-
-                                                :
-                                                // FALSE
-                                                // IS ADMIN
-                                                <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#a31d23]" >{b.event_name || b.title}</td>}
-
-                                            {/* DEBUG USER ROLE AND ID AND BOOKING ID */}
-                                            {/* <td>{b.creator_id + currentUserId + currentUserRole}</td> */}
-                                            {/*  */}
-                                            <td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
                                                 {facilityMap[String(b.event_facility)] || 'Unknown Facility'}
                                             </td>
-                                            {/*  */}
+
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 {(() => {
                                                     const d = (b.event_date || b.date || '').split('T')[0];
                                                     if (!d) return '';
                                                     const [year, month, day] = d.split('-');
-
-                                                    // create a Date object
                                                     const dateObj = new Date(`${year}-${month}-${day}`);
-
-                                                    // increment the day by 1
                                                     dateObj.setDate(dateObj.getDate() + 1);
-
-                                                    // format as "October 1, 2025"
                                                     return dateObj.toLocaleDateString('en-US', {
                                                         year: 'numeric',
                                                         month: 'long',
@@ -1580,54 +1627,37 @@ export default function Booking() {
                                                 })()}
                                             </td>
 
-                                            {/* <td className="px-6 py-4 whitespace-nowrap">
-                                            {b.event_date ? b.event_date.split('T')[0] : ''}
-                                        </td> */}
                                             <td className="px-6 py-4 whitespace-nowrap text-center">
-                                                {(b.starting_time && b.ending_time)
+                                                {b.starting_time && b.ending_time
                                                     ? `${formatTime(b.starting_time)} - ${formatTime(b.ending_time)}`
                                                     : b.time}
                                             </td>
 
-                                            {UserisNotAdmin
-                                                ? (
-                                                    <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#a31d23]">
-                                                        {affiliations.find(a => a.id === Number(b.organization))?.abbreviation || ` ${b.organization}`}
-                                                    </td>
-                                                )
-                                                : (
-                                                    (parseInt(b.creator_id) === parseInt(currentUserId))
-                                                        ? (
-                                                            <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#a31d23]">
-                                                                {affiliations.find(a => a.id === Number(b.organization))?.abbreviation || `${b.organization}`}
-                                                            </td>
-                                                        )
-                                                        : (
-                                                            <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#daa7aa]">Hidden</td>
-                                                        )
-                                                )
-                                            }
+                                            <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#a31d23]">
+                                                {affiliations.find(a => a.id === Number(b.organization))?.abbreviation ||
+                                                    b.organization}
+                                            </td>
 
-
-                                            <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                            <td
+                                                className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
                                                 {editReservationId === b.id ? (
                                                     <select
                                                         value={b.reservation ? 'Reservation' : 'Booking'}
                                                         onChange={(e) => handleReservationChange(b.id, e.target.value)}
                                                         onBlur={() => setEditReservationId(null)}
                                                         autoFocus
-                                                        className="text-xs px-3 py-1 border rounded-full focus:ring-2 focus:ring-[#96161C] font-bold shadow"
-                                                        style={{ minWidth: 120 }}
+                                                        className="text-xs px-3 py-1 border rounded-full font-bold"
                                                     >
                                                         <option value="Booking">Booking</option>
                                                         <option value="Reservation">Reservation</option>
                                                     </select>
                                                 ) : (
                                                     <span
-                                                        className={`px-3 py-1 rounded-full text-xs font-bold shadow
-        ${b.reservation
-                                                                ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                                                                : 'bg-green-100 text-green-800 border border-green-300'
+                                                        className={`px-3 py-1 rounded-full text-xs font-bold ${b.reservation
+                                                            ? 'bg-blue-100 text-blue-800'
+                                                            : 'bg-green-100 text-green-800'
                                                             }`}
                                                         onClick={() => setEditReservationId(b.id)}
                                                     >
@@ -1636,185 +1666,180 @@ export default function Booking() {
                                                 )}
                                             </td>
 
-
-
-
-                                            {/* Insider / Employee / Student / Outsider Badge */}
                                             <td>
                                                 <span
-                                                    className={`px-3 py-1 rounded-full text-xs font-semibold
-      ${b.insider === 'employee'
-                                                            ? 'bg-purple-100 text-purple-800'
-                                                            : b.insider === 'student'
-                                                                ? 'bg-yellow-100 text-yellow-800'
-                                                                : 'bg-gray-100 text-gray-800'
+                                                    className={`px-3 py-1 rounded-full text-xs font-semibold ${b.insider === 'employee'
+                                                        ? 'bg-purple-100 text-purple-800'
+                                                        : b.insider === 'student'
+                                                            ? 'bg-yellow-100 text-yellow-800'
+                                                            : 'bg-gray-100 text-gray-800'
                                                         }`}
                                                 >
-                                                    {b.insider === 'employee' ? 'Employee' : b.insider === 'student' ? 'Student' : 'Outsider'}
+                                                    {b.insider === 'employee'
+                                                        ? 'Employee'
+                                                        : b.insider === 'student'
+                                                            ? 'Student'
+                                                            : 'Outsider'}
                                                 </span>
                                             </td>
-                                            {showRequesterInfo && (
-                                                <>
-                                                    {UserisNotAdmin ?
-
-                                                        ((parseInt(b.creator_id) === parseInt(currentUserId)) ?
-                                                            <td className="px-6 py-4 whitespace-nowrap " >{b.requested_by}</td>
-                                                            :
-                                                            <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#daa7aa]" >Hidden</td>
-                                                        )
-                                                        :
-                                                        <td className="px-6 py-4 whitespace-nowrap  " >{b.requested_by}</td>}
-                                                    {/* <td className="px-6 py-4 whitespace-nowrap">{b.requested_by || b.requestedBy || '-'}</td> */}
-                                                    {/* <td className="px-6 py-4 whitespace-nowrap">{b.contact || '-'}</td> */}
-
-                                                    {UserisNotAdmin ?
-
-                                                        ((parseInt(b.creator_id) === parseInt(currentUserId)) ?
-                                                            <td className="px-6 py-4 whitespace-nowrap  " >{b.contact}</td>
-                                                            :
-                                                            <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#daa7aa]" >Hidden</td>
-                                                        )
-                                                        :
-                                                        <td className="px-6 py-4 whitespace-nowrap " >{b.contact}</td>}
-                                                </>
-                                            )}
-                                            {UserisNotAdmin ?
-                                                <td onClick={(e) => e.stopPropagation()}> <span
-                                                    className={`px-3 py-1 rounded-full text-xs font-bold shadow
-                                                        ${b.status === 'approved'
-                                                            ? 'bg-green-100 text-green-700 border border-green-300'
-                                                            : b.status === 'pending'
-                                                                ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
-                                                                : b.status === 'declined'
-                                                                    ? 'bg-red-100 text-red-700 border border-red-300'
-                                                                    : b.status === 'rescheduled'
-                                                                        ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                                                                        : 'bg-gray-100 text-gray-700 border border-gray-300'
-                                                        }`}
-                                                >
-                                                    {b.status || 'Pending'}
-                                                </span></td>
-                                                :
-                                                <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={(e) => { handleStatusClick(idx); e.stopPropagation(); }}>
-                                                    {editStatusIndex === idx ? (
-                                                        <select
-                                                            value={b.status}
-                                                            onChange={(e) => handleStatusChange(idx, e.target.value, b.id)}
-                                                            onBlur={() => setEditStatusIndex(null)}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            autoFocus
-                                                            className="text-xs px-3 py-1 border rounded-full focus:ring-2 focus:ring-[#96161C] font-bold shadow"
-                                                            style={{ minWidth: 120 }}
-                                                        >
-                                                            <option value="" disabled className="text-gray-400">Select status</option>
-                                                            <option value="Pending" style={{ background: '#FEF3C7', color: '#B45309', fontWeight: 'bold' }}>Pending</option>
-                                                            <option value="Approved" style={{ background: '#D1FAE5', color: '#047857', fontWeight: 'bold' }}>Approved</option>
-                                                            <option value="Declined" style={{ background: '#FECACA', color: '#B91C1C', fontWeight: 'bold' }}>Declined</option>
-                                                            <option value="Rescheduled" style={{ background: '#DBEAFE', color: '#1D4ED8', fontWeight: 'bold' }}>Rescheduled</option>
-                                                        </select>
-                                                    ) : (
+                                            <td
+                                                className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {inPivot ? (
+                                                    UserisNotAdmin ? (
                                                         <span
                                                             className={`px-3 py-1 rounded-full text-xs font-bold shadow
-                                                        ${b.status === 'approved'
-                                                                    ? 'bg-green-100 text-green-700 border border-green-300'
-                                                                    : b.status === 'pending'
-                                                                        ? 'bg-yellow-100 text-yellow-700 border border-yellow-300'
+          ${b.status === '  '
+                                                                    ? 'bg-green-100 text-green-700'
+                                                                    : b.status === 'Pending'
+                                                                        ? 'bg-yellow-100 text-yellow-700'
                                                                         : b.status === 'declined'
-                                                                            ? 'bg-red-100 text-red-700 border border-red-300'
-                                                                            : b.status === 'rescheduled'
-                                                                                ? 'bg-blue-100 text-blue-700 border border-blue-300'
-                                                                                : 'bg-gray-100 text-gray-700 border border-gray-300'
+                                                                            ? 'bg-red-100 text-red-700'
+                                                                            : 'bg-gray-100 text-gray-700'
                                                                 }`}
                                                         >
                                                             {b.status || 'Pending'}
                                                         </span>
-                                                    )}
-                                                </td>
-                                            }
+                                                    ) : editStatusIndex === idx ? (
+                                                        <select
+                                                            value={b.status}
+                                                            onChange={(e) => handleStatusChange(idx, e.target.value, b.id)}
+                                                            onBlur={() => setEditStatusIndex(null)}
+                                                            autoFocus
+                                                            className="text-xs px-3 py-1 border rounded-full font-bold"
+                                                        >
+                                                            <option value="Pending">Pending</option>
+                                                            <option value="Approved">Approved</option>
+                                                            <option value="Declined">Declined</option>
+                                                            <option value="Rescheduled">Rescheduled</option>
+                                                        </select>
+                                                    ) : (
+                                                        <span
+                                                            className="px-3 py-1 rounded-full text-xs font-bold shadow"
+                                                            onClick={() => setEditStatusIndex(idx)}
+                                                        >
+                                                            {b.status || 'Pending'}
+                                                        </span>
+                                                    )
+                                                ) : (
+                                                    <span className="italic text-gray-400">NO ACCESS</span>
+                                                )}
+                                            </td>
                                             {UserisNotAdmin ? null : (
-                                                <td className='text-center'>
-                                                    <div>
-                                                        {b.booking_fee === null || b.booking_fee === 'default'
-                                                            ? 0
-                                                            : b.booking_fee}
-                                                    </div>
+                                                <td className="text-center">
+                                                    {b.booking_fee ?? 0}
                                                 </td>
                                             )}
-
-                                            <td className="px-6 py-4 whitespace-nowrap text-right flex gap-2 justify-center" onClick={(e) => e.stopPropagation()}>
-                                                <div className='group relative inline-block'>
-                                                    {UserisNotAdmin ?
-
-                                                        ((parseInt(b.creator_id) === parseInt(currentUserId)) ?
+                                            <td
+                                                className="px-6 py-4 font-semibold text-center"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {!inPivot ? (
+                                                    <span className="text-gray-400 italic">No Access</span>
+                                                ) : UserisNotAdmin ? (
+                                                    parseInt(b.creator_id) === parseInt(currentUserId) ? (
+                                                        <div className="flex gap-2 justify-center">
                                                             <button
-                                                                // onClick={(e) => e.stopPropagation()}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleEdit(b);
+                                                                }}
+                                                                className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
+                                                            >
+                                                                Edit
+                                                            </button>
+
+                                                            <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     cancelBooking(b.id);
-                                                                }} // assuming b.id is the primary key
-                                                                className="text-red-600 hover:text-red-800 transition"
-                                                                title="Cancel Booking"
+                                                                }}
+                                                                className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
                                                             >
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-off-icon lucide-circle-off"><path d="m2 2 20 20" /><path d="M8.35 2.69A10 10 0 0 1 21.3 15.65" /><path d="M19.08 19.08A10 10 0 1 1 4.92 4.92" /></svg>
-                                                                <div className='opacity-0 bottom-full left-1/2 -translate-x-1/2 mb-2 absolute group-hover:opacity-100 text-sm'>
-                                                                    Cancle Booking
-                                                                </div>
+                                                                Cancel
                                                             </button>
-                                                            :
-                                                            <td className="px-6 py-4 whitespace-nowrap font-semibold text-[#daa7aa]" >Hidden</td>
-                                                        )
-                                                        :
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[#daa7aa]">Hidden</span>
+                                                    )
+                                                ) : (
+                                                    <div className="flex gap-2 justify-center">
                                                         <button
                                                             onClick={(e) => {
-                                                                cancelBooking(b.id);
                                                                 e.stopPropagation();
-                                                            }} // assuming b.id is the primary key
-                                                            className="text-red-600 hover:text-red-800 transition"
-                                                            title="Cancel Booking"
+                                                                handleEdit(b);
+                                                            }}
+                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-[#96161C] text-[#96161C]"
                                                         >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-off-icon lucide-circle-off"><path d="m2 2 20 20" /><path d="M8.35 2.69A10 10 0 0 1 21.3 15.65" /><path d="M19.08 19.08A10 10 0 1 1 4.92 4.92" /></svg>
-                                                            <div className='opacity-0 bottom-full left-1/2 -translate-x-1/2 mb-2 absolute group-hover:opacity-100 text-sm'>
-                                                                Cancle Booking
-                                                            </div>
-                                                        </button>}
+                                                            Edit
+                                                        </button>
 
-                                                </div>
-                                                {showFacilityBreakdown &&
-                                                    (<button
-                                                        onClick={() => handleEdit(b)}
-                                                        className="text-[#96161C] hover:text-[#7a1217] transition"
-                                                        title="Edit Booking"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block" viewBox="0 0 20 20" fill="currentColor">
-                                                            <path d="M17.414 2.586a2 2 0 010 2.828L8.414 14.414l-4.828 1.414 1.414-4.828L14.586 2.586a2 2 0 012.828 0z" />
-                                                        </svg>
-                                                    </button>)
-                                                }
-                                                {showFacilityBreakdown &&
-                                                    <button
-                                                        onClick={() => handleDelete(b.id)} // assuming b.id is the primary key
-                                                        className="text-red-600 hover:text-red-800 transition"
-                                                        title="Delete Booking"
-                                                    >
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 inline-block" fill="currentColor" viewBox="0 0 24 24">
-                                                            <path d="M9 3v1H4v2h16V4h-5V3H9zm1 5v12h2V8h-2zm4 0v12h2V8h-2z" />
-                                                        </svg>
-                                                    </button>
-                                                }
-                                                <ActionButton
-                                                    label="Payment"
-                                                    variant="warning"
-                                                    onClick={() => {
-                                                        setEditingPaymentBookingId(booking.id);
-                                                        setPaymentValue(booking.booking_fee ?? 0);
-                                                        setShowPaymentModal(true);
-                                                    }}
-                                                />
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDelete(b.id);
+                                                            }}
+                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-red-600 text-red-600"
+                                                        >
+                                                            Delete
+                                                        </button>
+
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openPaymentModal(b);
+                                                            }}
+                                                            className="px-4 py-1 text-sm font-semibold rounded-full border border-blue-600 text-blue-600"
+                                                        >
+                                                            Payment
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </td>
+
+
+
+                                            {/* <td
+                                                className="px-6 py-4 whitespace-nowrap text-right flex gap-2 justify-center"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                {inPivot ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => openPaymentModal(b)}
+                                                            className="text-[#96161C] hover:text-[#7a1217]"
+                                                        >
+                                                            Payment
+                                                        </button>
+
+                                                        {showFacilityBreakdown && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleEdit(b)}
+                                                                    className="text-[#96161C]"
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDelete(b.id)}
+                                                                    className="text-red-600"
+                                                                >
+                                                                    Delete
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <span className="italic text-gray-400">NO ACCESS</span>
+                                                )}
+                                            </td> */}
                                         </tr>
-                                    </React.Fragment>
-                                )))}
+                                    );
+                                })
+                            )}
                         </tbody>
+
                     </table>
                     <   div
                         id="booking-summary-content"
@@ -1853,7 +1878,7 @@ export default function Booking() {
 
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-6 gap-x-10">
                                                 <InfoItem icon={<Building />} label="Facility"
-                                                    value={booking.event_facility || booking.facility} />
+                                                    value={facilityMap[String(selectedBooking.event_facility)] || 'Unknown Facility'} />
 
                                                 <InfoItem icon={<Calendar />} label="Date"
                                                     value={booking.event_date || booking.date} />
@@ -1865,7 +1890,8 @@ export default function Booking() {
                                                     value={booking.requested_by} />
 
                                                 <InfoItem icon={<Users />} label="Organization"
-                                                    value={booking.organization || booking.org} />
+                                                    value={affiliations.find(a => a.id === Number(selectedBooking.organization))
+                                                        ?.abbreviation || 'Unknown Organization'} />
 
                                                 <InfoItem icon={<Phone />} label="Contact"
                                                     value={booking.contact} />
@@ -1898,10 +1924,10 @@ export default function Booking() {
                                         </section>
 
                                         {/* RIGHT — VEHICLES + ACTIONS */}
-                                        <section className="flex flex-col gap-10">
+                                        {/* <section className="flex flex-col gap-10"> */}
 
-                                            {/* Vehicles */}
-                                            <div className="mt-8">
+                                        {/* Vehicles */}
+                                        {/* <div className="mt-8">
                                                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Vehicles</h3>
 
                                                 <div className="mt-6">
@@ -1918,21 +1944,20 @@ export default function Booking() {
                                                         <p className="text-gray-500 italic">No vehicles booked for this event</p>
                                                     )}
 
-                                                    {/* LOG IN ALL CAPS */}
                                                     {selectedBooking?.matchedVehicles?.length > 0 && console.log(
                                                         `MATCH FOUND FOR BOOKING: ${selectedBooking.event_name.toUpperCase()} ON ${(selectedBooking.event_date || selectedBooking.date).split('T')[0]}`
                                                     )}
                                                 </div>
-                                            </div>
+                                            </div> */}
 
 
 
 
 
-                                            {/* Actions */}
+                                        {/* Actions */}
 
 
-                                        </section>
+                                        {/* </section> */}
                                     </div>
 
                                     {/* Footer */}
@@ -2052,12 +2077,17 @@ export default function Booking() {
                                     <input
                                         type="number"
                                         min="0"
-                                        step="0.01"
+                                        step="1"
                                         value={paymentValue}
-                                        onChange={(e) => setPaymentValue(e.target.value)}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            console.log("💰 Payment input changed:", val);
+                                            setPaymentValue(val);
+                                        }}
                                         className="w-full border rounded-lg px-4 py-2 mb-4"
                                         required
                                     />
+
 
                                     <div className="flex justify-end gap-2">
                                         <button
