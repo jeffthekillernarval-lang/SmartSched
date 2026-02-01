@@ -11,14 +11,25 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
 
     try {
-        await pool.query(
-            `UPDATE "User"
-             SET deleted = true
-             WHERE id = $1`,
+        const result = await pool.query(
+            `DELETE FROM "User"
+             WHERE id = $1
+             RETURNING id`,
             [id]
         );
 
-        res.json({ success: true, message: 'User deleted (soft) successfully' });
+        if (result.rowCount === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'User permanently deleted',
+            deletedUserId: result.rows[0].id
+        });
     } catch (err) {
         console.error('Delete user error:', err);
         res.status(500).json({

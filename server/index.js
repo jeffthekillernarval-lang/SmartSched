@@ -216,7 +216,7 @@ const availableEquipments = require('./routes/cruds/availableEquipments');
 
 app.use('/api', userVehiclesRoutes);
 app.use('/api', userEquipmentsRoutes);
-app.use('/api', availableEquipments);
+app.use('/api/available-equipments', availableEquipments);
 const updateEquipmentStatus = require('./routes/cruds/updateEquipmentStatus');
 
 app.use('/api/update-equipment-status', updateEquipmentStatus);

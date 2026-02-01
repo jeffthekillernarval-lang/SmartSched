@@ -54,18 +54,14 @@ router.post('/', async (req, res) => {
             message: `Missing required fields: ${missing.join(', ')}`
         });
     }
+    const datesArray = req.body.dates;
 
-
-    // Validate and construct dates array based on mode
-    // ✅ Construct dates array (single-date booking)
-    if (!date) {
+    if (!Array.isArray(datesArray) || !datesArray.length) {
         return res.status(400).json({
             success: false,
-            message: 'Missing required field: date'
+            message: 'Missing or invalid dates array'
         });
     }
-
-    const datesArray = [date];
 
 
     try {

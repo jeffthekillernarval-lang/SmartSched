@@ -313,12 +313,12 @@ export default function LandingPage() {
                     )}
 
 
-                    <button
+                    {/* <button
                         onClick={() => setisEquipmentOpen(!isEquipmentOpen)}
                         className="px-2 pt-4 text-xs font-bold text-[#ffa7a7] uppercase tracking-wider text-left w-full"
                     >
                         Equipment Bookings {isEquipmentOpen ? '▾' : '▸'}
-                    </button>
+                    </button> */}
                     {canSee('equipment-calendar') || canSee('equipment-booking') ? (
                         <>
                             <button
