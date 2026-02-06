@@ -6,16 +6,25 @@ const { Pool } = require("pg");
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
-// ONLY CREATE IS AVAILABLE  for system limitations and to avoid system malfunctions with data mishandling
+// ONLY CREATE IS AVAILABLE  for system limitations and to avoid system malfunctions with data mishandling  
 require("dotenv").config();
 
 router.post("/", async (req, res) => {
     const { message, bookings = {}, currentDateTime } = req.body;
 
-    /* ------------------------------------
-       FORMAT EXISTING BOOKINGS (OLD STYLE)
-    ------------------------------------ */
-    // Fetch facility lookup (id → name)
+    const formattedBookings = [];
+
+    // VEHICLE LOOKUP
+    const vehicleResult = await pool.query(
+        `SELECT id, vehicle_name FROM "Vehicles" WHERE enabled = true`
+    );
+
+    const vehicleMap = {};
+    vehicleResult.rows.forEach(v => {
+        vehicleMap[v.id] = v.vehicle_name;
+    });
+
+    // FACILITY LOOKUP
     const facilityResult = await pool.query(
         `SELECT id, name FROM "Facilities" WHERE enabled = true`
     );
@@ -25,7 +34,29 @@ router.post("/", async (req, res) => {
         facilityMap[f.id] = f.name;
     });
 
-    const formattedBookings = [];
+    // LATEST VEHICLE BOOKING
+    const latestVehicleBookingResult = await pool.query(`
+    SELECT vb.*, v.vehicle_name
+    FROM "VehicleBooking" vb
+    LEFT JOIN "Vehicles" v
+      ON v.id = vb.vehicle_id::INTEGER
+    WHERE vb.deleted = false
+    ORDER BY vb.id DESC
+    LIMIT 1
+`);
+
+    if (latestVehicleBookingResult.rows.length > 0) {
+        const b = latestVehicleBookingResult.rows[0];
+
+        formattedBookings.push(
+            `- Latest Vehicle Booking:
+  Vehicle: ${b.vehicle_name || `Vehicle ID ${b.vehicle_id}`}
+  Date(s): ${Array.isArray(b.dates) ? b.dates.join(", ") : "N/A"}
+  Purpose: ${b.purpose || "N/A"}
+  Destination: ${b.destination || "N/A"}`
+        );
+    }
+
 
     if (Array.isArray(bookings.facilities)) {
         bookings.facilities.forEach(b => {
@@ -44,11 +75,22 @@ router.post("/", async (req, res) => {
 
     if (Array.isArray(bookings.vehicles)) {
         bookings.vehicles.forEach(v => {
+            const vehicleName =
+                vehicleMap[v.vehicle_id] || `Vehicle ${v.vehicle_id}`;
+
+            const dateText = Array.isArray(v.dates)
+                ? v.dates.join(", ")
+                : "Unknown date";
+
             formattedBookings.push(
-                `- Vehicle: ${v.vehicle_Type} on ${v.date} (${v.purpose})`
+                `- Vehicle: ${vehicleName}
+  Date(s): ${dateText}
+  Purpose: ${v.purpose || "N/A"}
+  Destination: ${v.destination || "N/A"}`
             );
         });
     }
+
 
     if (Array.isArray(bookings.equipments)) {
         bookings.equipments.forEach(e => {
@@ -85,6 +127,7 @@ FACILITY:
   "reservation": false,
   "insider": false
 }
+When users ask for the latest booking, use the most recent booking by ID.
 
 VEHICLE:
 {
