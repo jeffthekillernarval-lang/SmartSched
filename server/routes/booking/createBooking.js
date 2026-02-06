@@ -127,13 +127,25 @@ router.post('/', async (req, res) => {
                 const facilityName =
                     facilityResult.rows[0]?.name || `Facility ${facilityId}`;
 
-                let suggestionText = suggestion
-                    ? `\n✅ Available time: ${suggestion.start} to ${suggestion.end}`
-                    : `\n❌ No other available time slots on this date.`;
+                return res.status(409).json({
+                    success: false,
+                    message: `Conflict detected for ${facilityName} on ${s.date} from ${s.startTime} to ${s.endTime}.`,
+                    facilityId: facilityId,
+                    facilityName: facilityName,
+                    requested: {
+                        date: s.date,
+                        start: s.startTime,
+                        end: s.endTime
+                    },
+                    suggestedSlots: suggestion ? [
+                        {
+                            start: suggestion.start,
+                            end: suggestion.end
+                        }
+                    ] : [],
+                    nextAvailableDate: null
+                });
 
-                throw new Error(
-                    `Conflict detected for ${facilityName} on ${s.date} from ${s.startTime} to ${s.endTime}.${suggestionText}`
-                );
             }
             /* ===============================
           ORGANIZATION → AFFILIATION ID

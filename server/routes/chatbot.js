@@ -10,6 +10,9 @@ const pool = new Pool({
 });
 
 router.post("/", async (req, res) => {
+    const { message, bookings = {}, currentDateTime } = req.body;
+    const formattedBookings = [];
+
     function parseMonthDayToISO(text, year = 2026) {
         const months = {
             january: "01",
@@ -30,8 +33,8 @@ router.post("/", async (req, res) => {
         return `${year}-${months[monthWord]}-${day.padStart(2, "0")}`;
     }
 
-    const { message, bookings = {}, currentDateTime } = req.body;
-    const formattedBookings = [];
+    // const { message, bookings = {}, currentDateTime } = req.body;
+    // const formattedBookings = [];
 
     /* ==================================================
        VEHICLE AVAILABILITY (ARRAY-SAFE, FACILITY-LIKE)
@@ -142,13 +145,18 @@ router.post("/", async (req, res) => {
     });
 
     const facilityResult = await pool.query(
-        `SELECT id, name FROM "Facilities" WHERE enabled = true`
+        `SELECT id, name, capacity FROM "Facilities" WHERE enabled = true`
     );
 
     const facilityMap = {};
     facilityResult.rows.forEach(f => {
-        facilityMap[f.id] = f.name;
+        facilityMap[f.id] = {
+            id: f.id,
+            name: f.name,
+            capacity: f.capacity
+        };
     });
+
 
     /* ==================================================
        LATEST VEHICLE BOOKING (CONTEXT)
@@ -183,7 +191,8 @@ router.post("/", async (req, res) => {
     if (Array.isArray(bookings.facilities)) {
         bookings.facilities.forEach(b => {
             const facilityName =
-                facilityMap[b.facility] || `Facility ${b.facility}`;
+                facilityMap[b.facility]?.name || `Facility ${b.facility}`;
+
 
             formattedBookings.push(
                 `- Facility: ${facilityName}
@@ -257,7 +266,7 @@ VEHICLE:
 {
   "intent": "create_booking",
   "resource_type": "equipment",
-  "equipments": [{ "equipment_type_id": "number", "quantity": 1 }],
+  "equipments": [{ "equipmentId": "number", "quantity": 1 }]
   "department_id": "number",
   "facility_id": "number",
   "dates": ["YYYY-MM-DD"],
@@ -296,6 +305,7 @@ ${formattedBookings.join("\n") || "None"}
         console.error("Cohere error:", err.message);
         return res.json({ reply: "AI service unavailable." });
     }
+
 
     /* ==================================================
        PARSE JSON
@@ -354,6 +364,39 @@ ${formattedBookings.join("\n") || "None"}
                     "Equipment could not be identified. Please specify the equipment name."
                 );
             }
+            /* ==================================================
+               FACILITY NAME → FACILITY ID (DYNAMIC, SUPPORTS NUMBERS)
+            ================================================== */
+            if (
+                bookingData.resource_type === "facility" &&
+                (!bookingData.event_facility || isNaN(Number(bookingData.event_facility)))
+            ) {
+                const facilitiesResult = await pool.query(
+                    `SELECT id, name FROM "Facilities" WHERE enabled = true`
+                );
+
+                const messageLower = message.toLowerCase();
+
+                for (const f of facilitiesResult.rows) {
+                    const facilityName = f.name.toLowerCase();
+
+                    // Exact match OR word-boundary-safe match
+                    const regex = new RegExp(`\\b${facilityName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`, "i");
+
+                    if (regex.test(messageLower)) {
+                        bookingData.event_facility = f.id;
+                        break;
+                    }
+                }
+            }
+            if (
+                bookingData.resource_type === "facility" &&
+                (!bookingData.event_facility || isNaN(Number(bookingData.event_facility)))
+            ) {
+                throw new Error(
+                    "Facility could not be identified. Please specify the exact facility name (e.g., M116, N-206, Gymnasium)."
+                );
+            }
 
             if (bookingData.resource_type === "facility") {
                 bookingData.creator_id = 1;
@@ -405,12 +448,148 @@ ${formattedBookings.join("\n") || "None"}
                 result: response.data
             });
         } catch (err) {
-            return res.json({
-                reply:
-                    "❌ Failed to create booking.\n" +
-                    (err.response?.data?.message || err.message)
-            });
+            const data = err.response?.data || {};
+            let reply = `❌ ${data.message || err.message}`;
+
+            // 1️⃣ Suggest other time slots (same date)
+            if (Array.isArray(data.suggestedSlots) && data.suggestedSlots.length) {
+                reply += `\n\n⏰ Other available time slots:`;
+                data.suggestedSlots.forEach(s => {
+                    reply += `\n• ${s.start} – ${s.end}`;
+                });
+            }
+
+            // 2️⃣ Suggest next available date
+            if (data.nextAvailableDate) {
+                reply += `\n\n📅 Next available date: ${data.nextAvailableDate}`;
+            }
+
+            // 3️⃣ Suggest similar-capacity facilities
+            if (bookingData?.resource_type === "facility" && bookingData.event_facility) {
+                const target = facilityMap[bookingData.event_facility];
+
+                if (target) {
+                    const alternatives = Object.values(facilityMap)
+                        .filter(f =>
+                            f.id !== target.id &&
+                            Math.abs(f.capacity - target.capacity) <= 150
+                        )
+                        .slice(0, 3);
+
+                    if (alternatives.length) {
+                        reply += `\n\n🏢 Similar facilities you can try:`;
+                        alternatives.forEach(f => {
+                            reply += `\n• ${f.name} (capacity ${f.capacity})`;
+                        });
+                    }
+                }
+            }
+            // 4️⃣ Check alternative facilities with similar capacity (same date & time)
+            if (
+                bookingData?.resource_type === "facility" &&
+                bookingData.event_facility &&
+                err.response?.data?.requested
+            ) {
+                const { date, start, end } = err.response.data.requested;
+                const target = facilityMap[bookingData.event_facility];
+
+                if (target) {
+                    const candidates = Object.values(facilityMap).filter(f =>
+                        f.id !== target.id &&
+                        Math.abs(f.capacity - target.capacity) <= 150
+                    );
+
+                    const availableAlternatives = [];
+
+                    for (const f of candidates) {
+                        const conflictCheck = await pool.query(
+                            `
+        SELECT 1
+        FROM "Booking"
+        WHERE event_facility = $1
+          AND event_date = $2
+          AND deleted = false
+          AND (
+            starting_time < $4
+            AND ending_time > $3
+          )
+        LIMIT 1
+        `,
+                            [f.id, date, start, end]
+                        );
+
+                        if (conflictCheck.rowCount === 0) {
+                            availableAlternatives.push(f);
+                        }
+                    }
+
+                    if (availableAlternatives.length > 0) {
+                        reply += `\n\n🏢 Other available facilities with similar capacity:`;
+                        availableAlternatives.slice(0, 3).forEach(f => {
+                            reply += `\n• ${f.name} (capacity ${f.capacity})`;
+                        });
+                    } else {
+                        reply += `\n\nℹ️ No other facilities with similar capacity are available at this time.`;
+                    }
+                }
+            }
+            // 5️⃣ Suggest other dates where the SAME facility is available
+            if (
+                bookingData?.resource_type === "facility" &&
+                bookingData.event_facility &&
+                err.response?.data?.requested
+            ) {
+                const { date, start, end } = err.response.data.requested;
+                const facilityId = bookingData.event_facility;
+
+                // Look ahead N days (keep small to avoid heavy queries)
+                const LOOKAHEAD_DAYS = 7;
+                const baseDate = new Date(date);
+                const availableDates = [];
+
+                for (let i = 1; i <= LOOKAHEAD_DAYS; i++) {
+                    const d = new Date(baseDate);
+                    d.setDate(d.getDate() + i);
+                    const isoDate = d.toISOString().slice(0, 10);
+
+                    const conflictCheck = await pool.query(
+                        `
+      SELECT 1
+      FROM "Booking"
+      WHERE event_facility = $1
+        AND event_date = $2
+        AND deleted = false
+        AND (
+          starting_time < $4
+          AND ending_time > $3
+        )
+      LIMIT 1
+      `,
+                        [facilityId, isoDate, start, end]
+                    );
+
+                    if (conflictCheck.rowCount === 0) {
+                        availableDates.push(isoDate);
+                    }
+
+                    if (availableDates.length >= 3) break;
+                }
+
+                if (availableDates.length > 0) {
+                    reply += `\n\n📅 Other available dates for this facility:`;
+                    availableDates.forEach(d => {
+                        // Since we checked conflicts using the SAME requested time,
+                        // the facility is guaranteed free for that time range
+                        reply += `\n• ${d} (available for ${start} – ${end})`;
+                    });
+                } else {
+                    reply += `\n\nℹ️ No other available dates for this facility in the next ${LOOKAHEAD_DAYS} days.`;
+                }
+            }
+
+            return res.json({ reply });
         }
+
     }
 
     /* ==================================================
