@@ -1,134 +1,160 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const { Pool } = require('pg');
+const { Pool } = require("pg");
 
-// Use your DATABASE_URL
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
 
 /**
  * POST /api/create-equipment-booking
- * Body: {
- *   equipments: [{ equipmentId: string, quantity: number }],
- *   departmentId: string,
- *   facilityId: string,
- *   purpose: string,
- *   mode: string,
- *   date: string,
- *   specificDates: array of strings (YYYY-MM-DD),
- *   rangeStart: string (YYYY-MM-DD),
- *   rangeEnd: string (YYYY-MM-DD),
- *   timeStart: string (HH:MM),
- *   timeEnd: string (HH:MM)
- * }
+ *
+ * Supports:
+ * - Frontend (equipmentId already provided)
+ * - Chatbot (equipment_name resolved to ID)
  */
-router.post('/', async (req, res) => {
+router.post("/", async (req, res) => {
     const {
         equipments,
         departmentId,
         facilityId,
         purpose,
-        mode,
-        date,
-        specificDates,
-        rangeStart,
-        rangeEnd,
         timeStart,
-        timeEnd
+        timeEnd,
+        dates
     } = req.body;
 
-    // Validate required fields
+    /* ===============================
+       VALIDATION (frontend-safe)
+    =============================== */
     const missing = [];
 
-    if (!equipments?.length) missing.push('equipments');
-    if (!departmentId) missing.push('departmentId');
-    if (!facilityId) missing.push('facilityId');
-    if (!purpose) missing.push('purpose');
-    if (!timeStart) missing.push('timeStart');
-    if (!timeEnd) missing.push('timeEnd');
+    if (!Array.isArray(equipments) || !equipments.length) missing.push("equipments");
+    if (!departmentId) missing.push("departmentId");
+    if (!facilityId) missing.push("facilityId");
+    if (!purpose) missing.push("purpose");
+    if (!timeStart) missing.push("timeStart");
+    if (!timeEnd) missing.push("timeEnd");
+    if (!Array.isArray(dates) || !dates.length) missing.push("dates");
 
     if (missing.length) {
         return res.status(400).json({
             success: false,
-            message: `Missing required fields: ${missing.join(', ')}`
+            message: `Missing required fields: ${missing.join(", ")}`
         });
     }
-    const datesArray = req.body.dates;
-
-    if (!Array.isArray(datesArray) || !datesArray.length) {
-        return res.status(400).json({
-            success: false,
-            message: 'Missing or invalid dates array'
-        });
-    }
-
 
     try {
-        // Check conflicts for each equipment and date
+        /* ==========================================
+           EQUIPMENT NAME → ID (CHATBOT FALLBACK)
+        ========================================== */
         for (const eq of equipments) {
-            for (const bookingDate of datesArray) {
+            if (!eq.equipmentId && eq.equipment_name) {
+                const result = await pool.query(
+                    `
+                    SELECT id
+                    FROM "Equipments"
+                    WHERE enabled = true
+                      AND LOWER(name) = LOWER($1)
+                    LIMIT 1
+                    `,
+                    [eq.equipment_name]
+                );
+
+                if (result.rowCount === 0) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Equipment "${eq.equipment_name}" not found`
+                    });
+                }
+
+                eq.equipmentId = result.rows[0].id;
+            }
+
+            if (!eq.equipmentId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Equipment ID is missing"
+                });
+            }
+        }
+
+        /* ===============================
+           CONFLICT CHECK
+        =============================== */
+        for (const eq of equipments) {
+            for (const bookingDate of dates) {
                 const conflictQuery = `
-                    SELECT *
+                    SELECT 1
                     FROM "Equipment"
                     WHERE equipment_type_id = $1
-                    AND $2 = ANY(dates)
-                    AND facility_id = $3
-                    AND (
+                      AND facility_id = $2
+                      AND $3 = ANY(dates)
+                      AND (
                         ($4::time < time_end AND $5::time > time_start)
-                    )
+                      )
+                    LIMIT 1
                 `;
-                const { rows: conflicts } = await pool.query(conflictQuery, [
+
+                const { rowCount } = await pool.query(conflictQuery, [
                     eq.equipmentId,
-                    bookingDate,
                     facilityId,
+                    bookingDate,
                     timeStart,
                     timeEnd
                 ]);
 
-                if (conflicts.length > 0) {
+                if (rowCount > 0) {
                     return res.status(400).json({
                         success: false,
-                        message: `Conflict: Equipment ID ${eq.equipmentId} is already booked on ${bookingDate} from ${conflicts[0].time_start} to ${conflicts[0].time_end}`
+                        message: `Conflict: Equipment ID ${eq.equipmentId} is already booked on ${bookingDate}`
                     });
                 }
             }
         }
 
-        // Insert each equipment booking into the database
+        /* ===============================
+           INSERT BOOKINGS
+        =============================== */
         for (const eq of equipments) {
             await pool.query(
-                `INSERT INTO "Equipment" (
-      equipment_type_id,
-      quantity,
-      affiliation_id,
-      facility_id,
-      dates,
-      purpose,
-      time_start,
-      time_end
-  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                `
+                INSERT INTO "Equipment" (
+                    equipment_type_id,
+                    quantity,
+                    affiliation_id,
+                    facility_id,
+                    dates,
+                    purpose,
+                    time_start,
+                    time_end
+                )
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+                `,
                 [
                     eq.equipmentId,
                     eq.quantity ?? 1,
                     departmentId,
                     facilityId,
-                    datesArray,
+                    dates,
                     purpose,
                     timeStart,
                     timeEnd
                 ]
             );
-
         }
 
-        res.json({
+        return res.json({
             success: true,
-            message: 'Equipment booking created successfully'
+            message: "Equipment booking created successfully"
         });
     } catch (err) {
-        console.error('Create Equipment Booking error:', err);
-        res.status(500).json({ success: false, message: 'Failed to create equipment booking', error: err.message });
+        console.error("Create Equipment Booking error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to create equipment booking",
+            error: err.message
+        });
     }
 });
 

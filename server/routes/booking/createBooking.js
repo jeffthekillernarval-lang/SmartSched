@@ -6,6 +6,18 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });
 
+/* ----------------------------------
+   TIME HELPERS
+---------------------------------- */
+function toMinutes(t) {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+}
+
+function toTime(m) {
+    return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
 router.post('/', async (req, res) => {
     const {
         schedules,
@@ -35,12 +47,28 @@ router.post('/', async (req, res) => {
         const facilityId = Number(event_facility);
 
         for (const s of schedules) {
-            if (!s.date || s.date.trim() === '') {
-                throw new Error('Invalid or missing date in schedule.');
+            if (!s.date || !s.startTime || !s.endTime) {
+                throw new Error('Invalid or missing schedule data.');
             }
 
             /* ===============================
-               🚨 CONFLICT CHECK (SERVER-SIDE)
+               FETCH DAY BOOKINGS (FOR SUGGESTION)
+            ================================ */
+            const dayBookings = await client.query(
+                `
+                SELECT starting_time, ending_time
+                FROM "Booking"
+                WHERE event_facility = $1
+                  AND event_date = $2
+                  AND deleted = false
+                  AND status IN ('Pending', 'Approved')
+                ORDER BY starting_time
+                `,
+                [facilityId, s.date]
+            );
+
+            /* ===============================
+               CONFLICT CHECK
             ================================ */
             const conflictCheck = await client.query(
                 `
@@ -50,28 +78,92 @@ router.post('/', async (req, res) => {
                   AND event_date = $2
                   AND deleted = false
                   AND status IN ('Pending', 'Approved')
-                  AND (
-                        $3 < ending_time
-                    AND $4 > starting_time
-                  )
+                  AND ($3 < ending_time AND $4 > starting_time)
                 LIMIT 1
                 `,
-                [
-                    facilityId,
-                    s.date,
-                    s.startTime,
-                    s.endTime
-                ]
+                [facilityId, s.date, s.startTime, s.endTime]
             );
 
+            /* ===============================
+               COMPUTE AVAILABLE SLOT (IF CONFLICT)
+            ================================ */
             if (conflictCheck.rowCount > 0) {
+                const OPEN = 6 * 60;   // 06:00
+                const CLOSE = 22 * 60; // 22:00
+
+                const requestedDuration =
+                    toMinutes(s.endTime) - toMinutes(s.startTime);
+
+                let cursor = OPEN;
+                let suggestion = null;
+
+                for (const b of dayBookings.rows) {
+                    const start = toMinutes(b.starting_time);
+                    const end = toMinutes(b.ending_time);
+
+                    if (start - cursor >= requestedDuration) {
+                        suggestion = {
+                            start: toTime(cursor),
+                            end: toTime(cursor + requestedDuration)
+                        };
+                        break;
+                    }
+
+                    cursor = Math.max(cursor, end);
+                }
+
+                if (!suggestion && CLOSE - cursor >= requestedDuration) {
+                    suggestion = {
+                        start: toTime(cursor),
+                        end: toTime(cursor + requestedDuration)
+                    };
+                }
+
+                const facilityResult = await client.query(
+                    `SELECT name FROM "Facilities" WHERE id = $1`,
+                    [facilityId]
+                );
+
+                const facilityName =
+                    facilityResult.rows[0]?.name || `Facility ${facilityId}`;
+
+                let suggestionText = suggestion
+                    ? `\n✅ Available time: ${suggestion.start} to ${suggestion.end}`
+                    : `\n❌ No other available time slots on this date.`;
+
                 throw new Error(
-                    `Conflict detected for facility ${facilityId} on ${s.date} from ${s.startTime} to ${s.endTime}`
+                    `Conflict detected for ${facilityName} on ${s.date} from ${s.startTime} to ${s.endTime}.${suggestionText}`
                 );
             }
+            /* ===============================
+          ORGANIZATION → AFFILIATION ID
+       ================================ */
+            let organizationValue = organization;
+
+            // If organization is NOT numeric, resolve it from Affiliations
+            if (organization && isNaN(Number(organization))) {
+                const affiliationResult = await client.query(
+                    `
+        SELECT id
+        FROM "Affiliations"
+        WHERE enabled = true
+          AND (
+              LOWER(abbreviation) = LOWER($1)
+              OR LOWER(meaning) = LOWER($1)
+          )
+        LIMIT 1
+        `,
+                    [organization]
+                );
+
+                if (affiliationResult.rowCount > 0) {
+                    organizationValue = affiliationResult.rows[0].id;
+                }
+            }
+
 
             /* ===============================
-               ✅ INSERT (SAFE)
+               INSERT BOOKING
             ================================ */
             const result = await client.query(
                 `
@@ -102,7 +194,7 @@ router.post('/', async (req, res) => {
                     event_name,
                     facilityId,
                     requested_by,
-                    organization,
+                    organizationValue,
                     contact,
                     creator_id,
                     reservation,
@@ -118,7 +210,7 @@ router.post('/', async (req, res) => {
         res.json({
             success: true,
             bookings: insertedIds,
-            message: `${insertedIds.length} bookings created`
+            message: `${insertedIds.length} booking(s) created`
         });
 
     } catch (err) {
