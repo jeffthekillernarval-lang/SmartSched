@@ -1,6 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const axios = require("axios");
+const { Pool } = require("pg");
+
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL
+});
+// ONLY CREATE IS AVAILABLE  for system limitations and to avoid system malfunctions with data mishandling
 require("dotenv").config();
 
 router.post("/", async (req, res) => {
@@ -9,13 +15,30 @@ router.post("/", async (req, res) => {
     /* ------------------------------------
        FORMAT EXISTING BOOKINGS (OLD STYLE)
     ------------------------------------ */
+    // Fetch facility lookup (id → name)
+    const facilityResult = await pool.query(
+        `SELECT id, name FROM "Facilities" WHERE enabled = true`
+    );
+
+    const facilityMap = {};
+    facilityResult.rows.forEach(f => {
+        facilityMap[f.id] = f.name;
+    });
+
     const formattedBookings = [];
 
     if (Array.isArray(bookings.facilities)) {
         bookings.facilities.forEach(b => {
+            const facilityName =
+                facilityMap[b.facility] || `Facility ${b.facility}`;
+
             formattedBookings.push(
-                `- Facility: ${b.name} at ${b.facility} on ${b.date} ${b.startTime}-${b.endTime}`
+                `- Facility: ${facilityName}
+       Date: ${b.date}
+       Time: ${b.startTime}–${b.endTime}
+       Event: ${b.name}`
             );
+
         });
     }
 
@@ -45,6 +68,9 @@ You can chat naturally.
 
 ONLY when the user clearly wants to create a booking,
 respond with JSON ONLY using ONE of these formats.
+
+Facility names are provided alongside their IDs.
+Always refer to facilities by name when replying to users.
 
 FACILITY:
 {
