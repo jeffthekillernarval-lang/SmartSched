@@ -379,7 +379,7 @@ export default function LandingPage() {
                             {isVehicleOpen && (
                                 <>
                                     {canSee('vehicle-calendar') && (
-                                        <SidebarItem icon={<Calendar size={20} />} label="Vehicle Calendar" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-calendar')} />
+                                        <SidebarItem icon={<Calendar size={20} />} label="Vehicle-Driver Calendar" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-calendar')} />
                                     )}
                                     {canSee('vehicle-booking') && (
                                         <SidebarItem icon={<ClipboardList size={20} />} label="Vehicle Bookings" open={isSidebarOpen} onClick={() => handleSetActivePage('vehicle-booking')} />

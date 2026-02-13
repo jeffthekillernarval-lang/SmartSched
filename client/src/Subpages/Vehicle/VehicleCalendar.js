@@ -3,6 +3,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import DriverScheduleTimeline from './DriverScheduleTimeline';
 
 const vehicleTypeColors = {
     'isuzu': '#b5d8f6',             // pastel blue
@@ -76,7 +77,10 @@ export default function VehicleBookingCalendar() {
     <body>
       <div class="header">
         <h1>School Vehicle Booking Receipt</h1>
-        <h2>${new Date(booking.date).toLocaleDateString()}</h2>
+        <h2>${new Date(booking.start_datetime).toLocaleString()} 
+– 
+${new Date(booking.end_datetime).toLocaleString()}</h2>
+
       </div>
 
       <div class="section">
@@ -85,7 +89,10 @@ export default function VehicleBookingCalendar() {
         <div class="field"><span>Requestor:</span> ${booking.requestor}</div>
         <div class="field"><span>Department:</span> ${booking.department}</div>
         <div class="field"><span>Purpose:</span> ${booking.purpose}</div>
-        <div class="field"><span>Date:</span> ${new Date(booking.date).toLocaleDateString()}</div>
+        <div class="field"><span>Date:</span> ${new Date(booking.start_datetime).toLocaleString()}
+–
+${new Date(booking.end_datetime).toLocaleString()}
+</div>
         <div class="field"><span>Destination:</span> ${booking.destination || '________________'}</div>
         <div class="field"><span>Departure Time:</span> ${booking.departureTime || '____:__'}</div>
         <div class="field"><span>Arrival Time:</span> ${booking.arrivalTime || '____:__'}</div>
@@ -139,34 +146,45 @@ export default function VehicleBookingCalendar() {
                 // If backend returns { success, bookings }, use bookings array
                 const bookingsArr = Array.isArray(data) ? data : data.bookings || [];
                 const formatted = bookingsArr
-                    .filter(b => !b.deleted && Array.isArray(b.dates) && b.dates.length > 0)
+                    .filter(b => !b.deleted && b.start_datetime && b.end_datetime)
                     .map(b => {
-                        const typeKey = (b.vehicle_id || 'unregistered vehicle').toLowerCase();
+
+                        const typeKey = (b.vehicle_type || 'unregistered vehicle').toLowerCase();
                         const bgColor = vehicleTypeColors[typeKey] || '#e0e0e0';
 
                         return {
                             id: b.id,
-                            title: `Vehicle #${b.vehicle_id} | ${toTitleCase(b.requestor)}`,
-                            start: b.dates[0],        // ✅ FIX
-                            allDay: true,             // ✅ Vehicle bookings are date-based
+
+                            title: `${b.vehicle_name} | ${toTitleCase(b.requestor)}`,
+
+                            start: b.start_datetime,
+                            end: b.end_datetime,
+                            allDay: false,
+
                             backgroundColor: bgColor,
                             borderColor: bgColor,
                             textColor: '#000000',
+
                             extendedProps: {
-                                vehicleType: `Vehicle #${b.vehicle_id}`,
-                                department: toTitleCase(b.department_id),
+                                vehicleType: b.vehicle_name,
+                                department: b.department_name,
                                 purpose: b.purpose,
                                 requestor: toTitleCase(b.requestor),
-                                destination: b.destination
+                                destination: b.destination,
+                                plate: b.plate_number,
+                                start_datetime: b.start_datetime,
+                                end_datetime: b.end_datetime
                             }
                         };
                     });
 
 
+
                 setBookings(formatted);
                 setEvents(formatted);
                 // Extract unique vehicle types and departments, sort alphabetically
-                const uniqueTypes = Array.from(new Set(bookingsArr.map(b => toTitleCase(b.vehicle_Type)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
+                const uniqueTypes = Array.from(new Set(bookingsArr.map(b => toTitleCase(b.vehicle_type))
+                    .filter(Boolean))).sort((a, b) => a.localeCompare(b));
                 setVehicleTypes(['All', ...uniqueTypes]);
                 const uniqueDepts = Array.from(new Set(bookingsArr.map(b => toTitleCase(b.department)).filter(Boolean))).sort((a, b) => a.localeCompare(b));
                 setDepartments(['All', ...uniqueDepts]);
@@ -175,11 +193,18 @@ export default function VehicleBookingCalendar() {
     }, []);
 
     function toTitleCase(str) {
-        if (!str) return '';
-        return str.replace(/([a-z])([A-Z])/g, '$1 $2')
+        if (str === null || str === undefined) return '';
+
+        const safe = String(str); // 👈 force to string
+
+        return safe
+            .replace(/([a-z])([A-Z])/g, '$1 $2')
             .replace(/[-_]/g, ' ')
-            .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+            .replace(/\w\S*/g, (txt) =>
+                txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+            );
     }
+
 
     const handleFilterChange = (e) => {
         const { name, value } = e.target;
@@ -206,11 +231,20 @@ export default function VehicleBookingCalendar() {
             );
         }
         if (filter.dateFrom) {
-            filtered = filtered.filter(ev => ev.start >= filter.dateFrom);
+            const from = new Date(filter.dateFrom);
+            filtered = filtered.filter(ev =>
+                new Date(ev.end) >= from
+            );
         }
+
         if (filter.dateTo) {
-            filtered = filtered.filter(ev => ev.start <= filter.dateTo);
+            const to = new Date(filter.dateTo);
+            to.setHours(23, 59, 59, 999);
+            filtered = filtered.filter(ev =>
+                new Date(ev.start) <= to
+            );
         }
+
         setEvents(filtered);
     }, [filter, bookings]);
 
@@ -304,8 +338,11 @@ export default function VehicleBookingCalendar() {
                         center: 'title',
                         end: 'dayGridMonth,timeGridWeek,timeGridDay'
                     }}
-                    initialView="dayGridMonth"
+                    initialView="timeGridWeek"
                     editable={false}
+                    slotDuration="00:30:00"
+                    slotMinTime="06:00:00"
+                    slotMaxTime="22:00:00"
                     selectable={false}
                     events={events}
                     eventContent={renderEventContent}
@@ -330,7 +367,16 @@ export default function VehicleBookingCalendar() {
                                 <p><strong>Requestor:</strong> {selectedEvent.extendedProps.requestor}</p>
                                 <p><strong>Department:</strong> {selectedEvent.extendedProps.department}</p>
                                 <p><strong>Purpose:</strong> {selectedEvent.extendedProps.purpose}</p>
-                                <p><strong>Date:</strong> {new Date(selectedEvent.start).toLocaleDateString()}</p>
+                                <p>
+                                    <strong>Date:</strong> {
+                                        new Date(selectedEvent.start).toLocaleString()
+                                    }
+                                    &nbsp;–&nbsp;
+                                    {
+                                        new Date(selectedEvent.end).toLocaleString()
+                                    }
+                                </p>
+
                                 {selectedEvent.extendedProps.destination && (
                                     <p><strong>Destination:</strong> {selectedEvent.extendedProps.destination}</p>
                                 )}
@@ -364,6 +410,8 @@ export default function VehicleBookingCalendar() {
                 )}
 
             </div>
+            {/* wewewew */}
+            <DriverScheduleTimeline />
         </div>
     );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-
+import Logo from '../../../src/assets/logos/cjc_logo.png'
 export default function EquipmentBooking() {
     const [showEquipmentForm, setShowEquipmentForm] = useState(false);
     const [equipmentForm, setEquipmentForm] = useState({
@@ -433,87 +433,157 @@ export default function EquipmentBooking() {
     }, [equipmentForm.timeStart]);
     const downloadEquipmentReceipt = async (booking) => {
         const receiptDiv = document.createElement("div");
-        receiptDiv.style.width = "800px";
-        receiptDiv.style.padding = "2rem";
+
+        receiptDiv.style.width = "420px";
+        receiptDiv.style.padding = "25px";
         receiptDiv.style.backgroundColor = "white";
-        receiptDiv.style.fontFamily = "Arial, sans-serif";
+        receiptDiv.style.fontFamily = "Helvetica, Arial, sans-serif";
+        receiptDiv.style.color = "#000";
 
         receiptDiv.innerHTML = `
-        <h1 style="color:#96161C; text-align:center;">Equipment Booking Receipt</h1>
-        <p style="text-align:center;">Generated on ${new Date().toLocaleDateString()}</p>
+<div style="border-bottom:1px solid #96161C; padding-bottom:12px;">
 
-        <h3 style="margin-top:2rem;">Booking Details</h3>
-        <table style="width:100%; border-collapse:collapse;">
-            <tr>
-                <th style="border:1px solid #333; padding:8px;">Equipment</th>
-                <td style="border:1px solid #333; padding:8px;">
-                    ${getEquipmentName(booking.equipment_type_id)}
-                </td>
-            </tr>
-            <tr>
-                <th style="border:1px solid #333; padding:8px;">Department</th>
-                <td style="border:1px solid #333; padding:8px;">
-                    ${getDepartmentName(booking.affiliation_id)}
-                </td>
-            </tr>
-            <tr>
-                <th style="border:1px solid #333; padding:8px;">Facility</th>
-                <td style="border:1px solid #333; padding:8px;">
-                    ${getFacilityName(booking.facility_id)}
-                </td>
-            </tr>
-            <tr>
-                <th style="border:1px solid #333; padding:8px;">Date(s)</th>
-                <td style="border:1px solid #333; padding:8px;">
-                    ${formatBookingDates(booking.dates)}
-                </td>
-            </tr>
-            <tr>
-                <th style="border:1px solid #333; padding:8px;">Time</th>
-                <td style="border:1px solid #333; padding:8px;">
-                    ${booking.time_start?.slice(0, 5)} - ${booking.time_end?.slice(0, 5)}
-                </td>
-            </tr>
-            <tr>
-                <th style="border:1px solid #333; padding:8px;">Purpose</th>
-                <td style="border:1px solid #333; padding:8px;">
-                    ${booking.purpose}
-                </td>
-            </tr>
-            <tr>
-                <th style="border:1px solid #333; padding:8px;">Status</th>
-                <td style="border:1px solid #333; padding:8px;">
-                    ${booking.status}
-                </td>
-            </tr>
-        </table>
+  <!-- ROW 1: LOGO + SCHOOL INFO -->
+  <div style="
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:15px;
+  ">
 
-        <div style="display:flex; justify-content:space-between; margin-top:3rem;">
-            <div style="width:45%; text-align:center;">
-                <p>Requested By</p>
-                <div style="border-top:1px solid #333; margin-top:2rem;"></div>
-            </div>
-            <div style="width:45%; text-align:center;">
-                <p>Approved By</p>
-                <div style="border-top:1px solid #333; margin-top:2rem;"></div>
-            </div>
+    <img src="${Logo}" style="width:70px; height:auto;" />
+
+    <div style="text-align:left;">
+      <div style="font-size:18px; font-weight:700;">
+        Cor Jesu College
+      </div>
+      <div style="font-size:12px;">
+        Sacred Heart Avenue
+      </div>
+      <div style="font-size:12px;">
+        SY 2025–2026
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ROW 2: RECEIPT TITLE -->
+  <div style="
+    text-align:center;
+    margin-top:10px;
+    font-size:13px;
+    font-weight:700;
+    color:#96161C;
+    letter-spacing:1px;
+  ">
+    EQUIPMENT BOOKING RECEIPT
+  </div>
+
+</div>
+
+
+    <!-- DETAILS -->
+    <div style="
+      margin-top:25px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:30px 25px;
+      text-align:center;
+    ">
+
+      ${[
+                ["Equipment", getEquipmentName(booking.equipment_type_id)],
+                ["Department", getDepartmentName(booking.affiliation_id)],
+                ["Facility", getFacilityName(booking.facility_id)],
+                ["Status", booking.status],
+                ["Date", formatBookingDates(booking.dates)],
+                ["Time", `${booking.time_start?.slice(0, 5)} – ${booking.time_end?.slice(0, 5)}`],
+                // ["Purpose", booking.purpose]
+            ].map(row => `
+        <div>
+          <div style="font-size:13px; font-weight:500; min-height:18px;">
+            ${row[1] || "—"}
+          </div>
+
+          <div style="
+            width:75%;
+            margin:6px auto;
+            border-bottom:1px solid #000;
+          "></div>
+
+          <div style="
+            font-size:10px;
+            font-weight:700;
+            letter-spacing:0.5px;
+          ">
+            ${row[0].toUpperCase()}
+          </div>
         </div>
-    `;
+      `).join("")}
+
+    </div>
+    <!-- CENTERED PURPOSE -->
+    <div style="
+    margin-top:25px;
+    text-align:center;
+    ">
+
+    <div style="font-size:13px; font-weight:500;">
+        ${booking.purpose || "—"}
+    </div>
+
+    <div style="
+        width:60%;
+        margin:6px auto;
+        border-bottom:1px solid #000;
+    "></div>
+
+    <div style="
+        font-size:10px;
+        font-weight:700;
+        letter-spacing:0.5px;
+    ">
+        PURPOSE
+    </div>
+
+    </div>
+
+    <!-- SIGNATURES -->
+    <div style="
+      margin-top:35px;
+      display:flex;
+      justify-content:space-between;
+      text-align:center;
+    ">
+      <div style="width:40%;">
+        <div style="border-top:1px solid #000; margin-top:25px;"></div>
+        <div style="font-size:10px; margin-top:6px;">Requested By</div>
+      </div>
+
+      <div style="width:40%;">
+        <div style="border-top:1px solid #000; margin-top:25px;"></div>
+        <div style="font-size:10px; margin-top:6px;">Approved By</div>
+      </div>
+    </div>
+  `;
 
         document.body.appendChild(receiptDiv);
 
         const canvas = await html2canvas(receiptDiv, { scale: 2 });
         const imgData = canvas.toDataURL("image/png");
 
-        const pdf = new jsPDF("p", "pt", "a4");
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        const pdf = new jsPDF({
+            orientation: "portrait",
+            unit: "pt",
+            format: [420, 600] // compact size
+        });
 
-        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+        pdf.addImage(imgData, "PNG", 0, 0, 420, 600);
         pdf.save(`EquipmentBooking_Receipt_${booking.id}.pdf`);
 
         document.body.removeChild(receiptDiv);
     };
+
 
     // ========================== RENDER ==========================
     return (
@@ -1028,39 +1098,126 @@ export default function EquipmentBooking() {
                 </table>
             </div>
             {showReceiptModal && selectedBooking && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-                    <div className="bg-white rounded-xl shadow-lg w-full max-w-2xl p-6 relative">
-                        <h2 className="text-xl font-bold text-[#96161C] mb-4">
-                            Equipment Booking Summary
-                        </h2>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden">
 
-                        <div className="space-y-2 text-sm">
-                            <p><strong>Equipment:</strong> {getEquipmentName(selectedBooking.equipment_type_id)}</p>
-                            <p><strong>Department:</strong> {getDepartmentName(selectedBooking.affiliation_id)}</p>
-                            <p><strong>Facility:</strong> {getFacilityName(selectedBooking.facility_id)}</p>
-                            <p><strong>Date(s):</strong> {formatBookingDates(selectedBooking.dates)}</p>
-                            <p><strong>Time:</strong> {selectedBooking.time_start?.slice(0, 5)} - {selectedBooking.time_end?.slice(0, 5)}</p>
-                            <p><strong>Purpose:</strong> {selectedBooking.purpose}</p>
-                            <p><strong>Status:</strong> {selectedBooking.status}</p>
+                        {/* HEADER */}
+                        <div className="px-10 py-8 border-b">
+                            <h2 className="text-3xl font-bold text-gray-800">
+                                {getFacilityName(selectedBooking.facility_id)}
+                            </h2>
+                            <p className="text-base text-gray-500 mt-2">
+                                Equipment Booking Summary
+                            </p>
                         </div>
 
-                        <div className="flex justify-end gap-3 mt-6">
+                        {/* BODY */}
+                        <div className="px-10 py-8">
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-10 gap-x-16">
+
+                                {/* Equipment */}
+                                <div className="flex items-start gap-4">
+                                    <div className="text-2xl text-[#96161C]">📦</div>
+                                    <div>
+                                        <p className="text-sm text-gray-500">Equipment</p>
+                                        <p className="text-lg font-semibold text-gray-800 mt-1">
+                                            {getEquipmentName(selectedBooking.equipment_type_id)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Department */}
+                                <div className="flex items-start gap-4">
+                                    <div className="text-2xl text-[#96161C]">🏢</div>
+                                    <div>
+                                        <p className="text-sm text-gray-500">Department</p>
+                                        <p className="text-lg font-semibold text-gray-800 mt-1">
+                                            {getDepartmentName(selectedBooking.affiliation_id)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Date */}
+                                <div className="flex items-start gap-4">
+                                    <div className="text-2xl text-[#96161C]">📅</div>
+                                    <div>
+                                        <p className="text-sm text-gray-500">Date(s)</p>
+                                        <p className="text-lg font-semibold text-gray-800 mt-1">
+                                            {formatBookingDates(selectedBooking.dates)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Time */}
+                                <div className="flex items-start gap-4">
+                                    <div className="text-2xl text-[#96161C]">⏰</div>
+                                    <div>
+                                        <p className="text-sm text-gray-500">Time</p>
+                                        <p className="text-lg font-semibold text-gray-800 mt-1">
+                                            {selectedBooking.time_start?.slice(0, 5)} – {selectedBooking.time_end?.slice(0, 5)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Purpose (Full Width) */}
+                                <div className="md:col-span-2 flex items-start gap-4">
+                                    <div className="text-2xl text-[#96161C]">📝</div>
+                                    <div>
+                                        <p className="text-sm text-gray-500">Purpose</p>
+                                        <p className="text-lg font-semibold text-gray-800 mt-1">
+                                            {selectedBooking.purpose}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Status */}
+                                <div className="flex items-start gap-4">
+                                    <div className="text-2xl text-[#96161C]">📌</div>
+                                    <div>
+                                        <p className="text-sm text-gray-500">Status</p>
+                                        <span
+                                            className={`inline-block mt-2 px-4 py-1 rounded-full text-sm font-bold
+                  ${selectedBooking.status === 'Approved'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : selectedBooking.status === 'Rejected'
+                                                        ? 'bg-red-100 text-red-700'
+                                                        : selectedBooking.status === 'Returned'
+                                                            ? 'bg-blue-100 text-blue-700'
+                                                            : 'bg-yellow-100 text-yellow-700'
+                                                }`}
+                                        >
+                                            {selectedBooking.status}
+                                        </span>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        {/* FOOTER */}
+                        <div className="px-10 py-6 border-t bg-gray-50 flex justify-end gap-5">
                             <button
                                 onClick={() => downloadEquipmentReceipt(selectedBooking)}
-                                className="px-6 py-2 rounded-lg bg-[#96161C] text-white"
+                                className="px-8 py-3 rounded-xl bg-green-600 text-white font-semibold text-base hover:bg-green-700 transition"
                             >
                                 Download Receipt
                             </button>
+
                             <button
                                 onClick={() => setShowReceiptModal(false)}
-                                className="px-6 py-2 rounded-lg bg-gray-200"
+                                className="px-8 py-3 rounded-xl bg-gray-800 text-white text-base hover:bg-gray-900 transition"
                             >
                                 Close
                             </button>
                         </div>
+
                     </div>
                 </div>
             )}
+
+
         </div>
     );
 }

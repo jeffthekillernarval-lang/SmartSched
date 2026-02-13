@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'; import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import Logo from '../../../src/assets/logos/cjc_logo.png'
 
 export default function VehicleBooking() {
     const [conflicts, setConflicts] = useState([]); // ⬅️ store conflicts
@@ -45,25 +46,31 @@ export default function VehicleBooking() {
         tomorrow.setDate(tomorrow.getDate() + 1);
         return tomorrow.toISOString().split('T')[0];
     }
-    const formatVehicleDatesInline = (dates) => {
-        if (!Array.isArray(dates) || dates.length === 0) return '—';
+    const formatDateTimeRange = (booking) => {
+        if (!booking.start_datetime || !booking.end_datetime) return '—';
 
-        const parsed = dates
-            .map(d => new Date(d))
-            .filter(d => !isNaN(d))
-            .sort((a, b) => a - b);
+        const start = new Date(booking.start_datetime);
+        const end = new Date(booking.end_datetime);
 
-        if (parsed.length === 0) return '—';
+        const sameDay = start.toDateString() === end.toDateString();
 
-        return parsed.length === 1
-            ? parsed[0].toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-            })
-            : `${parsed[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${parsed[parsed.length - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            }, ${parsed[0].getFullYear()}`;
+        const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+        const timeOptions = { hour: '2-digit', minute: '2-digit' };
+
+        if (sameDay) {
+            return `${start.toLocaleDateString('en-US', dateOptions)} 
+                ${start.toLocaleTimeString([], timeOptions)} 
+                - 
+                ${end.toLocaleTimeString([], timeOptions)}`;
+        }
+
+        return `${start.toLocaleDateString('en-US', dateOptions)} 
+            ${start.toLocaleTimeString([], timeOptions)}
+            → 
+            ${end.toLocaleDateString('en-US', dateOptions)} 
+            ${end.toLocaleTimeString([], timeOptions)}`;
     };
+
 
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -106,28 +113,20 @@ export default function VehicleBooking() {
         setIsAdmin(storedRole === 'admin');
     }, []);
     const [expandedRow, setExpandedRow] = useState(null);
-    // const [form, setForm] = useState({
-    //     vehicleId: "",
-    //     requestor: "",
-    //     affiliationId: "",
-    //     date: "",
-    //     purpose: "",
-    //     driverId: "",
-    //     destination: "",
-    // });
     const [form, setForm] = useState({
         vehicleId: "",
         requestor: "",
         affiliationId: "",
-        mode: "single", // "single", "specific", "range"
-        date: "",       // for single
-        specificDates: ["", "", "", ""], // up to 4
-        rangeStart: "",
-        rangeEnd: "",
+        startDate: "",
+        startTime: "",
+        endDate: "",
+        endTime: "",
         purpose: "",
         driverId: "",
         destination: ""
     });
+
+
 
 
     useEffect(() => {
@@ -154,20 +153,7 @@ export default function VehicleBooking() {
         fetchDriversForVehicle();
     }, [form.vehicleId]);
 
-    const formatVehicleDates = (dates) => {
-        if (!Array.isArray(dates) || dates.length === 0) return '—';
 
-        const parsed = dates.map(d => new Date(d)).sort((a, b) => a - b);
-
-        return parsed.length === 1
-            ? parsed[0].toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-            })
-            : `${parsed[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${parsed[parsed.length - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            }, ${parsed[0].getFullYear()}`;
-    };
 
     const getDepartmentName = (booking, affiliations) =>
         affiliations.find(a => a.id === Number(booking.department_id))
@@ -180,95 +166,167 @@ export default function VehicleBooking() {
     const downloadReceipt = async (booking) => {
         // 1. Create a temporary div to render receipt
         const receiptDiv = document.createElement("div");
-        receiptDiv.style.width = "800px"; // set width for PDF layout
-        receiptDiv.style.padding = "2rem";
+        receiptDiv.style.width = "420px";  // palm-sized width
+        receiptDiv.style.padding = "20px";
         receiptDiv.style.backgroundColor = "white";
-        receiptDiv.style.fontFamily = "Arial, sans-serif";
+        receiptDiv.style.fontFamily = "Helvetica, Arial, sans-serif";
         const vehicle = getVehicleDetails(booking, availableVehicles);
 
         receiptDiv.innerHTML = `
-<h1 style="color:#96161C; text-align:center;">School Vehicle Booking Receipt</h1>
-<h3 style="text-align:center; font-weight:normal;">
-  ${new Date().toLocaleDateString()}
-</h3>
+<div style="width:100%; font-family: 'Helvetica', Arial, sans-serif; color:#222;">
+<!-- HEADER WRAPPER -->
+<div style="border-bottom:1px solid #96161C; padding-bottom:12px;">
 
-<h3 style="color:#96161C; margin-top:2rem;">Booking Details</h3>
+  <!-- ROW 1: LOGO + SCHOOL INFO -->
+  <div style="
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:20px;
+  ">
 
-<table style="width:100%; border-collapse: collapse;">
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Vehicle Type</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${vehicle ? vehicle.vehicle_name : 'Unknown Vehicle'}
-    </td>
-  </tr>
+    <!-- LOGO -->
+    <img src="${Logo}" style="width:60px; height:auto;" />
 
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Vehicle Plate</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${vehicle?.plate_number || '—'}
-    </td>
-  </tr>
+    <!-- SCHOOL TEXT -->
+    <div style="text-align:left;">
+      <div style="font-size:18px; font-weight:700;">
+        Cor Jesu College
+      </div>
+      <div style="font-size:12px;">
+        Sacred Heart Avenue
+      </div>
+      <div style="font-size:12px;">
+        SY 2025–2026
+      </div>
+    </div>
 
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Requestor</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${booking.requestor}
-    </td>
-  </tr>
-
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Department</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${getDepartmentName(booking, affiliations)}
-    </td>
-  </tr>
-
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Driver</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${booking.driver_name || '—'}
-    </td>
-  </tr>
-
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Date</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${formatVehicleDates(booking.dates)}
-    </td>
-  </tr>
-
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Purpose</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${booking.purpose}
-    </td>
-  </tr>
-
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Destination</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${booking.destination}
-    </td>
-  </tr>
-
-  <tr>
-    <th style="border:1px solid #333; padding:8px;">Payment</th>
-    <td style="border:1px solid #333; padding:8px;">
-      ${booking.payment ? `₱${booking.payment}` : '—'}
-    </td>
-  </tr>
-</table>
-
-<div style="display:flex; justify-content:space-between; margin-top:3rem;">
-  <div style="text-align:center; width:45%;">
-    <div style="border-top:1px solid #333; margin-top:2rem;"></div>
-    <p>Requested By</p>
   </div>
 
-  <div style="text-align:center; width:45%;">
-    <div style="border-top:1px solid #333; margin-top:2rem;"></div>
-    <p>Approved By</p>
+  <!-- ROW 2: RECEIPT TITLE -->
+  <div style="
+    text-align:center;
+    margin-top:10px;
+    font-size:13px;
+    font-weight:700;
+    color:#96161C;
+    letter-spacing:2px;
+  ">
+    VEHICLE BOOKING RECEIPT
   </div>
+
+</div>
+
+
+
+
+<!-- COMPACT DETAILS -->
+<div style="
+  margin-top:20px;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:25px 20px;
+  text-align:center;
+">
+
+  ${[
+                ["Vehicle", vehicle ? vehicle.vehicle_name : "Unknown"],
+                ["Plate", vehicle?.plate_number || "—"],
+                ["Requestor", booking.requestor],
+                ["Dept.", getDepartmentName(booking, affiliations)],
+                ["Driver", booking.driver_name || "—"],
+                ["Date", formatDateTimeRange(booking)],
+                ["Purpose", booking.purpose],
+                ["Destination", booking.destination],
+                // ["Payment", booking.payment ? `₱ ${booking.payment}` : "—"]
+            ].map(row => `
+
+    <div>
+      <div style="
+        font-size:12px;
+        font-weight:400;
+        min-height:18px;
+      ">
+        ${row[1]}
+      </div>
+
+      <div style="
+        width:75%;
+        margin:5px auto;
+        border-bottom:1px solid #000;
+      "></div>
+
+      <div style="
+        font-size:9px;
+        font-weight:700;
+        letter-spacing:0.5px;
+      ">
+        ${row[0].toUpperCase()}
+      </div>
+    </div>
+
+  `).join("")}
+
+</div>
+<!-- CENTERED PAYMENT -->
+<div style="
+  margin-top:30px;
+  text-align:center;
+">
+
+  <div style="
+    font-size:13px;
+    font-weight:600;
+  ">
+    ${booking.payment ? `₱ ${booking.payment}` : "—"}
+  </div>
+
+  <div style="
+    width:40%;
+    margin:6px auto;
+    border-bottom:1px solid #000;
+  "></div>
+
+  <div style="
+    font-size:9px;
+    font-weight:700;
+    letter-spacing:0.5px;
+  ">
+    PAYMENT
+  </div>
+
+</div>
+
+
+
+
+ <!-- SIGNATURE -->
+<div style="
+  margin-top:30px;
+  display:flex;
+  justify-content:space-between;
+  font-size:9px;
+  text-align:center;
+">
+
+  <div style="width:45%;">
+    <div style="border-top:1px solid #000; margin-top:20px;"></div>
+    Requested By
+  </div>
+
+  <div style="width:45%;">
+    <div style="border-top:1px solid #000; margin-top:20px;"></div>
+    Approved By
+  </div>
+
+</div>
+
+
+  <!-- FOOTER -->
+  <div style="margin-top:50px; text-align:center; font-size:11px; color:#666;">
+    This document is system-generated and valid without signature.
+  </div>
+
 </div>
 `;
 
@@ -340,27 +398,28 @@ export default function VehicleBooking() {
 
         const currentUserId = localStorage.getItem("currentUserId");
 
-        let datesArray = [];
-        if (form.mode === "single") datesArray = [form.date];
-        if (form.mode === "specific") datesArray = form.specificDates.filter(d => d);
-        if (form.mode === "range") {
-            let start = new Date(form.rangeStart);
-            let end = new Date(form.rangeEnd);
-            if ((end - start) / (1000 * 60 * 60 * 24) > 6) {
-                alert("Date range cannot exceed 1 week.");
-                return;
-            }
-            for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
-                datesArray.push(d.toISOString().split('T')[0]);
-            }
-        }
+        // let datesArray = [];
+        // if (form.mode === "single") datesArray = [form.date];
+        // if (form.mode === "specific") datesArray = form.specificDates.filter(d => d);
+        // if (form.mode === "range") {
+        //     let start = new Date(form.rangeStart);
+        //     let end = new Date(form.rangeEnd);
+        //     if ((end - start) / (1000 * 60 * 60 * 24) > 6) {
+        //         alert("Date range cannot exceed 1 week.");
+        //         return;
+        //     }
+        //     for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
+        //         datesArray.push(d.toISOString().split('T')[0]);
+        //     }
+        // }
 
         const newBooking = {
             vehicle_id: Number(form.vehicleId),
             driver_id: form.driverId ? Number(form.driverId) : null,
             requestor: form.requestor,
             department_id: Number(form.affiliationId),
-            dates: datesArray,
+            start_datetime: `${form.startDate}T${form.startTime}`,
+            end_datetime: `${form.endDate}T${form.endTime}`,
             purpose: form.purpose,
             booker_id: Number(currentUserId),
             destination: form.destination,
@@ -417,9 +476,10 @@ export default function VehicleBooking() {
 
         try {
             const res = await fetch(
-                `http://localhost:5000/api/vehicle-conflicts?vehicleId=${encodeURIComponent(
-                    form.vehicleId
-                )}&date=${encodeURIComponent(form.date)}`
+                `http://localhost:5000/api/vehicle-conflicts?vehicleId=${form.vehicleId}
+&start=${encodeURIComponent(newBooking.start_datetime)}
+&end=${encodeURIComponent(newBooking.end_datetime)}
+`
             );
 
             const data = await res.json();
@@ -480,12 +540,29 @@ export default function VehicleBooking() {
 
                 const nonDeleted = data.filter(b => !b.deleted); // ignore deleted
                 // Map to add a formatted dates string
-                const bookingsWithDates = nonDeleted.map(b => ({
-                    ...b,
-                    formattedDates: Array.isArray(b.dates) ?
-                        b.dates.map(d => new Date(d).toLocaleDateString()).join(', ')
-                        : new Date(b.dates).toLocaleDateString()
-                }));
+                const bookingsWithDates = nonDeleted.map(b => {
+                    const start = new Date(b.start_datetime);
+                    const end = new Date(b.end_datetime);
+
+                    const sameDay =
+                        start.toDateString() === end.toDateString();
+
+                    const formattedDates = sameDay
+                        ? `${start.toLocaleDateString()} 
+           ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
+           - 
+           ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                        : `${start.toLocaleDateString()} 
+           ${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+           → 
+           ${end.toLocaleDateString()} 
+           ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+                    return {
+                        ...b,
+                        formattedDates
+                    };
+                });
 
                 setBookings(bookingsWithDates);
 
@@ -547,67 +624,30 @@ export default function VehicleBooking() {
             .replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
     }
 
-    // const handleEdit = (index) => {
-    //     setEditingId(index);
-    //     setForm(bookings[index]);
-    //     setShowForm(true);
-    //     window.scrollTo({ top: 0, behavior: 'smooth' });
-    // };
     const handleEdit = (index) => {
         const b = bookings[index];
         setEditingId(b.id);
 
-        // Default form values
-        let mode = "single";
-        let date = "";
-        let specificDates = ["", "", "", ""];
-        let rangeStart = "";
-        let rangeEnd = "";
-
-        if (Array.isArray(b.dates) && b.dates.length > 0) {
-            const dates = b.dates.map(d => new Date(d)).sort((a, b) => a - b);
-
-            if (dates.length === 1) {
-                mode = "single";
-                date = dates[0].toISOString().split("T")[0];
-            } else {
-                // Check if consecutive
-                const isConsecutive = dates.every((d, i) => {
-                    if (i === 0) return true;
-                    const diffDays = (d - dates[i - 1]) / (1000 * 60 * 60 * 24);
-                    return diffDays === 1;
-                });
-
-                if (isConsecutive) {
-                    mode = "range";
-                    rangeStart = dates[0].toISOString().split("T")[0];
-                    rangeEnd = dates[dates.length - 1].toISOString().split("T")[0];
-                } else {
-                    mode = "specific";
-                    // Fill specificDates array (max 4)
-                    specificDates = dates.slice(0, 4).map(d => d.toISOString().split("T")[0]);
-                    while (specificDates.length < 4) specificDates.push("");
-                }
-            }
-        }
+        const start = new Date(b.start_datetime);
+        const end = new Date(b.end_datetime);
 
         setForm({
-            vehicleId: b.vehicle_id ? String(b.vehicle_id) : "",
+            vehicleId: String(b.vehicle_id || ""),
             requestor: b.requestor || "",
-            affiliationId: b.department_id ? String(b.department_id) : "",
-            mode,
-            date,
-            specificDates,
-            rangeStart,
-            rangeEnd,
+            affiliationId: String(b.department_id || ""),
+            startDate: start.toISOString().split("T")[0],
+            startTime: start.toISOString().split("T")[1]?.slice(0, 5),
+            endDate: end.toISOString().split("T")[0],
+            endTime: end.toISOString().split("T")[1]?.slice(0, 5),
             purpose: b.purpose || "",
-            driverId: b.driver_id ? String(b.driver_id) : "",
+            driverId: String(b.driver_id || ""),
             destination: b.destination || "",
         });
 
         setShowForm(true);
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
+
 
 
 
@@ -794,73 +834,48 @@ export default function VehicleBooking() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium mb-1">Date*</label>
-                                {/* <input
-                                    type="date"
-                                    min={getTomorrowDate()}
-                                    name="date"
-                                    value={form.date}
-                                    onChange={handleChange}
-                                    className="w-full border rounded-lg px-4 py-2"
-                                    required
-                                /> */}
-                                {form.mode === "single" && (
+                                <label className="block text-sm font-medium mb-1">Start*</label>
+                                <div className="flex gap-2">
                                     <input
                                         type="date"
-                                        name="date"
+                                        name="startDate"
                                         min={minDate}
-                                        value={form.date}
+                                        value={form.startDate}
                                         onChange={handleChange}
                                         className="border rounded px-3 py-2 w-full"
                                         required
                                     />
-                                )}
-
-                                {form.mode === "specific" &&
-                                    form.specificDates.map((d, i) => (
-                                        <input
-                                            key={i}
-                                            type="date"
-                                            min={minDate}
-                                            value={d}
-                                            onChange={(e) => {
-                                                const newDates = [...form.specificDates];
-                                                newDates[i] = e.target.value;
-                                                setForm({ ...form, specificDates: newDates });
-                                            }}
-                                            className="border rounded px-3 py-2 w-full"
-                                        />
-                                    ))}
-
-                                {form.mode === "range" && (
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="date"
-                                            name="rangeStart"
-                                            min={minDate}
-                                            value={form.rangeStart}
-                                            onChange={handleChange}
-                                            className="border rounded px-3 py-2 w-full"
-                                        />
-                                        <input
-                                            type="date"
-                                            name="rangeEnd"
-                                            min={form.rangeStart || minDate}
-                                            value={form.rangeEnd}
-                                            onChange={handleChange}
-                                            className="border rounded px-3 py-2 w-full"
-                                        />
-                                    </div>
-                                )}
-
-                                <div className="mb-4">
-                                    <label className="block mb-1 font-semibold">Date Mode*</label>
-                                    <select name="mode" value={form.mode} onChange={handleChange} className="border rounded px-3 py-2 w-full">
-                                        <option value="single">Single Date</option>
-                                        <option value="specific">Specific Dates (max 4)</option>
-                                        <option value="range">Date Range (max 1 week)</option>
-                                    </select>
+                                    <input
+                                        type="time"
+                                        name="startTime"
+                                        value={form.startTime}
+                                        onChange={handleChange}
+                                        className="border rounded px-3 py-2 w-full"
+                                        required
+                                    />
                                 </div>
+
+                                <label className="block text-sm font-medium mb-1 mt-4">End*</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="date"
+                                        name="endDate"
+                                        min={form.startDate || minDate}
+                                        value={form.endDate}
+                                        onChange={handleChange}
+                                        className="border rounded px-3 py-2 w-full"
+                                        required
+                                    />
+                                    <input
+                                        type="time"
+                                        name="endTime"
+                                        value={form.endTime}
+                                        onChange={handleChange}
+                                        className="border rounded px-3 py-2 w-full"
+                                        required
+                                    />
+                                </div>
+
                             </div>
                         </div>
                         <div className='flex '>
@@ -944,7 +959,7 @@ export default function VehicleBooking() {
                                                 <td className="px-4 py-2">{c.requestor}</td>
                                                 <td className="px-4 py-2">{c.department_id}</td>
                                                 <td className="px-4 py-2">
-                                                    {new Date(c.date).toLocaleDateString('en-US')}
+                                                    {formatDateTimeRange(c)}
                                                 </td>
                                                 <td className="px-4 py-2">{c.purpose}</td>
                                             </tr>
@@ -1076,8 +1091,12 @@ export default function VehicleBooking() {
                                 (filter.search === '' || (b.requestor && b.requestor.toLowerCase().includes(filter.search.toLowerCase()))) &&
                                 (filter.vehicleType === 'All' || toTitleCase(b.vehicleType || b.vehicle_Type) === filter.vehicleType) &&
                                 (filter.department === 'All' || toTitleCase(b.department) === filter.department) &&
-                                (filter.dateFrom === '' || b.date >= filter.dateFrom) &&
-                                (filter.dateTo === '' || b.date <= filter.dateTo)
+                                (filter.dateFrom === '' ||
+                                    new Date(b.start_datetime) >= new Date(filter.dateFrom)) &&
+
+                                (filter.dateTo === '' ||
+                                    new Date(b.end_datetime) <= new Date(filter.dateTo))
+
                             ).map((b, index) => {
                                 const bookingVehicleId = Number(b.vehicle_id);
                                 const hasPivotAccess = userVehicleIds.includes(bookingVehicleId);
@@ -1123,42 +1142,8 @@ export default function VehicleBooking() {
 
                                             {/* Event Date */}
                                             <td className="px-6 py-4">
-                                                {Array.isArray(b.dates) && b.dates.length > 0
-                                                    ? (() => {
-                                                        // Convert to Date objects and sort
-                                                        const dates = b.dates.map(d => new Date(d)).sort((a, b) => a - b);
-
-                                                        // Check if dates are consecutive
-                                                        const isConsecutive = dates.every((d, i) => {
-                                                            if (i === 0) return true;
-                                                            const diffDays = (d - dates[i - 1]) / (1000 * 60 * 60 * 24);
-                                                            return diffDays === 1;
-                                                        });
-
-                                                        // Format month/day
-                                                        const options = { month: 'short', day: 'numeric' };
-                                                        const year = dates[0].getFullYear();
-
-                                                        if (dates.length === 1) {
-                                                            return `${dates[0].toLocaleDateString('en-US', options)}, ${year}`;
-                                                        }
-
-                                                        if (isConsecutive) {
-                                                            // Feb 1–3, 2026
-                                                            return `${dates[0].toLocaleDateString('en-US', options)}–${dates[dates.length - 1].getDate()}, ${year}`;
-                                                        } else {
-                                                            // Feb 1 & 3, 2026
-                                                            const formatted = dates.map(d => d.toLocaleDateString('en-US', options));
-                                                            const last = formatted.pop();
-                                                            return `${formatted.join(' & ')} & ${last}, ${year}`;
-                                                        }
-                                                    })()
-                                                    : 'No date'}
+                                                {formatDateTimeRange(b)}
                                             </td>
-
-
-
-
                                             {/* Purpose */}
                                             <td className="px-6 py-4">{b.purpose}</td>
                                             <td className="px-6 py-4">{b.destination}</td>
@@ -1348,7 +1333,7 @@ export default function VehicleBooking() {
                                                                 {affiliations.find(a => a.id === Number(b.department_id))
                                                                     ?.abbreviation || '—'}
                                                             </p>
-                                                            <p><strong>Date:</strong> {formatVehicleDatesInline(b.dates)}</p>
+                                                            <p><strong>Date:</strong> {formatDateTimeRange(b)}</p>
                                                             <p><strong>Purpose:</strong> {b.purpose}</p>
                                                         </div>
 

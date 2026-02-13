@@ -5,6 +5,7 @@ import { orgAbbreviations as facilityList } from '../../constants/FacilitiesList
 import { useLocation } from 'react-router-dom';
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import Logo from '../../../src/assets/logos/cjc_logo.png'
 // import BookingSummary from "../BookingSummary";
 import {
     X,
@@ -160,95 +161,220 @@ export default function Booking() {
 
 
     // ===== DOWNLOAD RECEIPT =====
+    // const downloadReceipt = () => {
+    //     if (!booking) return;
+
+    //     const doc = new jsPDF("p", "mm", "a4");
+    //     const left = 15;
+    //     let y = 20;
+
+    //     // Title
+    //     doc.setFontSize(18);
+    //     doc.text("Facility & Vehicle Booking Receipt", 105, y, { align: "center" });
+    //     y += 12;
+
+    //     doc.setFontSize(12);
+
+    //     // Booking Details
+    //     doc.text(`Event: ${booking.event_name || booking.title || '—'}`, left, y);
+    //     y += 8;
+
+    //     doc.text(
+    //         `Facility: ${getFacilityName(booking, facilityMap)}`,
+    //         left,
+    //         y
+    //     );
+    //     y += 8;
+
+    //     doc.text(
+    //         `Organization: ${getOrganizationName(booking, affiliations)}`,
+    //         left,
+    //         y
+    //     );
+    //     y += 8;
+
+    //     doc.text(
+    //         `Requested By: ${booking.requested_by || booking.requestedBy || '—'}`,
+    //         left,
+    //         y
+    //     );
+    //     y += 8;
+
+    //     doc.text(`Contact: ${booking.contact || '—'}`, left, y);
+    //     y += 8;
+
+    //     doc.text(
+    //         `Date: ${formatDisplayDate(booking.event_date || booking.date)}`,
+    //         left,
+    //         y
+    //     );
+    //     y += 8;
+
+    //     doc.text(
+    //         `Time: ${formatDisplayTime(
+    //             booking.starting_time || booking.start,
+    //             booking.ending_time || booking.end,
+    //             formatTime
+    //         )}`,
+    //         left,
+    //         y
+    //     );
+    //     y += 12;
+
+    //     // Vehicle section (optional)
+    //     if (Array.isArray(vehicles) && vehicles.length > 0) {
+    //         doc.setFontSize(14);
+    //         doc.text("Vehicle Reservations:", left, y);
+    //         y += 8;
+
+    //         doc.setFontSize(12);
+    //         vehicles.forEach((v, idx) => {
+    //             doc.text(
+    //                 `${idx + 1}. ${v.vehicle_type || 'Unknown Vehicle'} – ${v.plate_number || 'N/A'}`,
+    //                 left + 5,
+    //                 y
+    //             );
+    //             y += 7;
+    //         });
+
+    //         y += 5;
+    //     }
+
+    //     // Signatures
+    //     y += 10;
+    //     doc.text("__________________________", left, y);
+    //     doc.text("Requested By", left, y + 6);
+
+    //     doc.text("__________________________", 130, y);
+    //     doc.text("Approved By (President)", 130, y + 6);
+
+    //     // Save
+    //     doc.save(`${booking.event_name || "booking"}-receipt.pdf`);
+    // };
     const downloadReceipt = () => {
         if (!booking) return;
 
-        const doc = new jsPDF("p", "mm", "a4");
-        const left = 15;
-        let y = 20;
+        // Compact page size (smaller than A4)
+        const doc = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: [110, 170]
+        });
 
-        // Title
-        doc.setFontSize(18);
-        doc.text("Facility & Vehicle Booking Receipt", 105, y, { align: "center" });
-        y += 12;
+        const pageWidth = doc.internal.pageSize.getWidth();
+        let y = 12;
 
+        // ===== LOGO =====
+        const logoSize = 22;
+        doc.addImage(Logo, "PNG", pageWidth / 2 - logoSize / 2, y, logoSize, logoSize);
+        y += 26;
+
+        // ===== HEADER =====
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(15);
+        doc.text("Cor Jesu College", pageWidth / 2, y, { align: "center" });
+        y += 5;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.text("Sacred Heart Avenue", pageWidth / 2, y, { align: "center" });
+        y += 4;
+
+        doc.text("SY 2025–2026", pageWidth / 2, y, { align: "center" });
+        y += 6;
+
+        doc.setTextColor(150, 0, 0);
+        doc.setFont("helvetica", "bold");
         doc.setFontSize(12);
+        doc.text("FACILITY BOOKING RECEIPT", pageWidth / 2, y, { align: "center" });
 
-        // Booking Details
-        doc.text(`Event: ${booking.event_name || booking.title || '—'}`, left, y);
-        y += 8;
+        doc.setDrawColor(150, 0, 0);
+        doc.line(15, y + 3, pageWidth - 15, y + 3);
 
-        doc.text(
-            `Facility: ${getFacilityName(booking, facilityMap)}`,
-            left,
-            y
-        );
-        y += 8;
-
-        doc.text(
-            `Organization: ${getOrganizationName(booking, affiliations)}`,
-            left,
-            y
-        );
-        y += 8;
-
-        doc.text(
-            `Requested By: ${booking.requested_by || booking.requestedBy || '—'}`,
-            left,
-            y
-        );
-        y += 8;
-
-        doc.text(`Contact: ${booking.contact || '—'}`, left, y);
-        y += 8;
-
-        doc.text(
-            `Date: ${formatDisplayDate(booking.event_date || booking.date)}`,
-            left,
-            y
-        );
-        y += 8;
-
-        doc.text(
-            `Time: ${formatDisplayTime(
-                booking.starting_time || booking.start,
-                booking.ending_time || booking.end,
-                formatTime
-            )}`,
-            left,
-            y
-        );
         y += 12;
+        doc.setTextColor(0, 0, 0);
 
-        // Vehicle section (optional)
-        if (Array.isArray(vehicles) && vehicles.length > 0) {
-            doc.setFontSize(14);
-            doc.text("Vehicle Reservations:", left, y);
-            y += 8;
+        // ===== GRID SETTINGS (MATCH VEHICLE STYLE) =====
+        const leftX = pageWidth / 2 - 30;
+        const rightX = pageWidth / 2 + 30;
+        const rowSpacing = 16;
 
-            doc.setFontSize(12);
-            vehicles.forEach((v, idx) => {
-                doc.text(
-                    `${idx + 1}. ${v.vehicle_type || 'Unknown Vehicle'} – ${v.plate_number || 'N/A'}`,
-                    left + 5,
-                    y
-                );
-                y += 7;
-            });
+        const drawField = (x, y, value, label) => {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(10);
+            doc.text(value || "—", x, y, { align: "center" });
 
-            y += 5;
-        }
+            doc.line(x - 22, y + 2, x + 22, y + 2);
 
-        // Signatures
-        y += 10;
-        doc.text("__________________________", left, y);
-        doc.text("Requested By", left, y + 6);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7);
+            doc.text(label.toUpperCase(), x, y + 6, { align: "center" });
+        };
 
-        doc.text("__________________________", 130, y);
-        doc.text("Approved By (President)", 130, y + 6);
+        // ROW 1
+        drawField(leftX, y, getFacilityName(booking, facilityMap), "Facility");
+        drawField(rightX, y, getOrganizationName(booking, affiliations), "Organization");
+        y += rowSpacing;
 
-        // Save
-        doc.save(`${booking.event_name || "booking"}-receipt.pdf`);
+        // ROW 2
+        drawField(leftX, y, booking.requested_by || booking.requestedBy, "Requestor");
+        drawField(rightX, y, booking.contact, "Contact");
+        y += rowSpacing;
+
+        // ROW 3 (DATE + TIME aligned)
+        drawField(
+            leftX,
+            y,
+            formatDisplayDate(booking.event_date || booking.date),
+            "Date"
+        );
+
+        const timeValue = formatDisplayTime(
+            booking.starting_time || booking.start,
+            booking.ending_time || booking.end,
+            formatTime
+        );
+
+        drawField(
+            rightX,
+            y,
+            timeValue,
+            "Time"
+        );
+
+        y += 22;
+
+        // ===== SIGNATURES =====
+        const sigWidth = 40;       // width of each signature line
+        const gap = 20;            // space between the two lines
+
+        const leftCenter = pageWidth / 2 - (sigWidth / 2 + gap / 2);
+        const rightCenter = pageWidth / 2 + (sigWidth / 2 + gap / 2);
+
+        // Draw left line
+        doc.line(
+            leftCenter - sigWidth / 2,
+            y,
+            leftCenter + sigWidth / 2,
+            y
+        );
+
+        // Draw right line
+        doc.line(
+            rightCenter - sigWidth / 2,
+            y,
+            rightCenter + sigWidth / 2,
+            y
+        );
+
+        // Labels under lines
+        doc.setFontSize(7);
+        doc.text("Requested By", leftCenter, y + 5, { align: "center" });
+        doc.text("Approved By (President)", rightCenter, y + 5, { align: "center" });
+
+
+        // ===== SAVE =====
+        doc.save(`${booking.event_name || "facility-booking"}-receipt.pdf`);
     };
 
 
@@ -1880,8 +2006,21 @@ export default function Booking() {
                                                 <InfoItem icon={<Building />} label="Facility"
                                                     value={facilityMap[String(selectedBooking.event_facility)] || 'Unknown Facility'} />
 
-                                                <InfoItem icon={<Calendar />} label="Date"
-                                                    value={booking.event_date || booking.date} />
+                                                <InfoItem
+                                                    icon={<Calendar />}
+                                                    label="Date"
+                                                    value={
+                                                        booking.event_date || booking.date
+                                                            ? new Date(booking.event_date || booking.date)
+                                                                .toLocaleDateString("en-US", {
+                                                                    year: "numeric",
+                                                                    month: "long",
+                                                                    day: "numeric"
+                                                                })
+                                                            : "—"
+                                                    }
+                                                />
+
 
                                                 <InfoItem icon={<Clock />} label="Time"
                                                     value={`${booking.starting_time} – ${booking.ending_time}`} />

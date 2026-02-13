@@ -9,11 +9,12 @@ const pool = new Pool({
 router.post("/", async (req, res) => {
     let {
         vehicle_id,
-        vehicle_name, // 👈 allow name from chatbot
+        vehicle_name,
         driver_id,
         requestor,
         department_id,
-        dates,
+        start_datetime,
+        end_datetime,
         purpose,
         destination,
         booker_id = 1,
@@ -54,10 +55,12 @@ router.post("/", async (req, res) => {
             "vehicle_id",
             "requestor",
             "department_id",
-            "dates",
+            "start_datetime",
+            "end_datetime",
             "purpose",
             "destination",
         ];
+
 
         const missing = requiredFields.filter(
             (f) =>
@@ -78,30 +81,54 @@ router.post("/", async (req, res) => {
         /* --------------------------------------------------
            3️⃣ Normalize dates (array always)
         -------------------------------------------------- */
-        const dateArray = Array.isArray(dates) ? dates : [dates];
+        // const dateArray = Array.isArray(dates) ? dates : [dates];
 
         /* --------------------------------------------------
            4️⃣ Vehicle conflict check (DATE ARRAY SAFE)
         -------------------------------------------------- */
+        //     const conflictCheck = await pool.query(
+        //         `
+        //   SELECT id, unnest(dates) AS date
+        //   FROM "VehicleBooking"
+        //   WHERE vehicle_id = $1
+        //   AND deleted = false
+        //   `,
+        //         [Number(vehicle_id)]
+        //     );
+
+        //     const conflictingDates = conflictCheck.rows
+        //         .map((r) => r.date.toISOString().slice(0, 10))
+        //         .filter((d) => dateArray.includes(d));
+
+        //     if (conflictingDates.length > 0) {
+        //         return res.status(400).json({
+        //             success: false,
+        //             message: "Vehicle already booked on selected dates",
+        //             conflictDates: conflictingDates,
+        //         });
+        //     }
         const conflictCheck = await pool.query(
             `
-      SELECT id, unnest(dates) AS date
-      FROM "VehicleBooking"
-      WHERE vehicle_id = $1
-      AND deleted = false
-      `,
-            [Number(vehicle_id)]
+    SELECT id
+    FROM "VehicleBooking"
+    WHERE vehicle_id = $1
+    AND deleted = false
+    AND NOT (
+        end_datetime <= $2
+        OR start_datetime >= $3
+    )
+    `,
+            [
+                Number(vehicle_id),
+                start_datetime,
+                end_datetime
+            ]
         );
 
-        const conflictingDates = conflictCheck.rows
-            .map((r) => r.date.toISOString().slice(0, 10))
-            .filter((d) => dateArray.includes(d));
-
-        if (conflictingDates.length > 0) {
+        if (conflictCheck.rowCount > 0) {
             return res.status(400).json({
                 success: false,
-                message: "Vehicle already booked on selected dates",
-                conflictDates: conflictingDates,
+                message: "Vehicle already booked during this time range"
             });
         }
 
@@ -110,29 +137,31 @@ router.post("/", async (req, res) => {
         -------------------------------------------------- */
         const insertResult = await pool.query(
             `
-      INSERT INTO "VehicleBooking"
-      (
+    INSERT INTO "VehicleBooking"
+    (
         vehicle_id,
         driver_id,
         requestor,
         department_id,
-        dates,
+        start_datetime,
+        end_datetime,
         purpose,
         destination,
         booker_id,
         deleted,
         payment,
         status
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Pending')
-      RETURNING *
-      `,
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Pending')
+    RETURNING *
+    `,
             [
                 Number(vehicle_id),
                 driver_id ? Number(driver_id) : null,
                 requestor,
                 Number(department_id),
-                dateArray,
+                start_datetime,
+                end_datetime,
                 purpose,
                 destination,
                 Number(booker_id),
@@ -140,6 +169,7 @@ router.post("/", async (req, res) => {
                 Number(payment),
             ]
         );
+
 
         res.status(201).json({
             success: true,
