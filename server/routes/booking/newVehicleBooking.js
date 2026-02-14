@@ -109,15 +109,15 @@ router.post("/", async (req, res) => {
         //     }
         const conflictCheck = await pool.query(
             `
-    SELECT id
-    FROM "VehicleBooking"
-    WHERE vehicle_id = $1
-    AND deleted = false
-    AND NOT (
-        end_datetime <= $2
-        OR start_datetime >= $3
-    )
-    `,
+SELECT id, start_datetime, end_datetime, driver_id
+FROM "VehicleBooking"
+WHERE vehicle_id = $1
+AND deleted = false
+AND NOT (
+    end_datetime <= $2
+    OR start_datetime >= $3
+)
+`,
             [
                 Number(vehicle_id),
                 start_datetime,
@@ -128,9 +128,44 @@ router.post("/", async (req, res) => {
         if (conflictCheck.rowCount > 0) {
             return res.status(400).json({
                 success: false,
-                message: "Vehicle already booked during this time range"
+                type: "vehicle",
+                attempted: { start_datetime, end_datetime },
+                conflicts: conflictCheck.rows
             });
         }
+
+        /* --------------------------------------------------
+           4️⃣ Driver conflict check
+        -------------------------------------------------- */
+        if (driver_id) {
+            const driverConflict = await pool.query(
+                `
+SELECT id, vehicle_id, start_datetime, end_datetime
+FROM "VehicleBooking"
+WHERE driver_id = $1
+AND deleted = false
+AND NOT (
+    end_datetime <= $2
+    OR start_datetime >= $3
+)
+`,
+                [
+                    Number(driver_id),
+                    start_datetime,
+                    end_datetime
+                ]
+            );
+
+            if (driverConflict.rowCount > 0) {
+                return res.status(400).json({
+                    success: false,
+                    type: "driver",
+                    attempted: { start_datetime, end_datetime },
+                    conflicts: driverConflict.rows
+                });
+            }
+        }
+
 
         /* --------------------------------------------------
            5️⃣ Insert booking

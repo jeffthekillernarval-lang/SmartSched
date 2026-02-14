@@ -12,6 +12,15 @@ export default function VehicleBooking() {
     const [availableVehicles, setAvailableVehicles] = useState([]);
     const [affiliations, setAffiliations] = useState([]);
     const [availableDrivers, setAvailableDrivers] = useState([]);
+    const [bookingMode, setBookingMode] = useState("single");
+    // "single" | "specific" | "range"
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [specificDates, setSpecificDates] = useState([
+        { date: "", startTime: "", endTime: "" }
+    ]);
+    const inputClass =
+        "w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C] bg-white";
+
     useEffect(() => {
         const fetchAffiliations = async () => {
             try {
@@ -394,142 +403,251 @@ export default function VehicleBooking() {
     };
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
-
-        const currentUserId = localStorage.getItem("currentUserId");
-
-        // let datesArray = [];
-        // if (form.mode === "single") datesArray = [form.date];
-        // if (form.mode === "specific") datesArray = form.specificDates.filter(d => d);
-        // if (form.mode === "range") {
-        //     let start = new Date(form.rangeStart);
-        //     let end = new Date(form.rangeEnd);
-        //     if ((end - start) / (1000 * 60 * 60 * 24) > 6) {
-        //         alert("Date range cannot exceed 1 week.");
-        //         return;
-        //     }
-        //     for (let d = start; d <= end; d.setDate(d.getDate() + 1)) {
-        //         datesArray.push(d.toISOString().split('T')[0]);
-        //     }
-        // }
-
-        const newBooking = {
-            vehicle_id: Number(form.vehicleId),
-            driver_id: form.driverId ? Number(form.driverId) : null,
-            requestor: form.requestor,
-            department_id: Number(form.affiliationId),
-            start_datetime: `${form.startDate}T${form.startTime}`,
-            end_datetime: `${form.endDate}T${form.endTime}`,
-            purpose: form.purpose,
-            booker_id: Number(currentUserId),
-            destination: form.destination,
-        };
+        try {
+            e.preventDefault();
+            if (isSubmitting) return;
+            setIsSubmitting(true);
+            const currentUserId = localStorage.getItem("currentUserId");
 
 
-        // EDIT MODE
-        if (editingId !== null) {
-            try {
-                const res = await fetch(
-                    `http://localhost:5000/api/edit-vehicle-booking/${editingId}`,
-                    {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(newBooking),
+
+            let bookingsToCreate = [];
+
+            /* --------------------------------------------------
+               BUILD BOOKINGS BASED ON MODE
+            -------------------------------------------------- */
+
+            if (bookingMode === "single") {
+
+                if (!form.startDate || !form.startTime || !form.endTime) {
+                    alert("Please select date, start time, and end time.");
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                if (form.startTime >= form.endTime) {
+                    alert("End time must be after start time.");
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                bookingsToCreate.push({
+                    start_datetime: `${form.startDate}T${form.startTime}`,
+                    end_datetime: `${form.startDate}T${form.endTime}`
+                });
+            }
+
+
+            if (bookingMode === "specific") {
+
+                if (!specificDates || specificDates.length === 0) {
+                    alert("Add at least one date.");
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                for (const entry of specificDates) {
+
+                    if (!entry.date || !entry.startTime || !entry.endTime) {
+                        alert("All specific dates must have date, start time, and end time.");
+                        setIsSubmitting(false);
+                        return;
                     }
-                );
 
-                const data = await res.json();
+                    if (entry.startTime >= entry.endTime) {
+                        alert(`End time must be after start time for ${entry.date}.`);
+                        setIsSubmitting(false);
+                        return;
+                    }
 
-                if (data.success) {
-                    // ✅ best: update using returned booking
-                    setBookings((prev) =>
-                        prev.map((b) => (b.id === editingId ? data.booking : b))
+                    bookingsToCreate.push({
+                        start_datetime: `${entry.date}T${entry.startTime}`,
+                        end_datetime: `${entry.date}T${entry.endTime}`
+                    });
+                }
+            }
+
+
+
+            if (bookingMode === "range") {
+
+                if (!form.startDate || !form.endDate || !form.startTime || !form.endTime) {
+                    alert("Please select start date, end date, start time, and end time.");
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                if (form.startTime >= form.endTime) {
+                    alert("End time must be after start time.");
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                const start = new Date(form.startDate);
+                const end = new Date(form.endDate);
+
+                const diffDays = (end - start) / (1000 * 60 * 60 * 24);
+
+                if (diffDays < 0) {
+                    alert("End date cannot be before start date.");
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                if (diffDays > 6) {
+                    alert("Date range cannot exceed 1 week.");
+                    setIsSubmitting(false);
+                    return;
+                }
+
+                bookingsToCreate.push({
+                    start_datetime: `${form.startDate}T${form.startTime}`,
+                    end_datetime: `${form.endDate}T${form.endTime}`
+                });
+            }
+
+
+            /* --------------------------------------------------
+               EDIT MODE (unchanged logic)
+            -------------------------------------------------- */
+            if (editingId !== null) {
+
+                const editPayload = {
+                    vehicle_id: Number(form.vehicleId),
+                    driver_id: form.driverId ? Number(form.driverId) : null,
+                    requestor: form.requestor,
+                    department_id: Number(form.affiliationId),
+                    start_datetime: bookingsToCreate[0].start_datetime,
+                    end_datetime: bookingsToCreate[0].end_datetime,
+                    purpose: form.purpose,
+                    booker_id: Number(currentUserId),
+                    destination: form.destination,
+                };
+
+                try {
+                    const res = await fetch(
+                        `http://localhost:5000/api/edit-vehicle-booking/${editingId}`,
+                        {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(editPayload),
+                        }
                     );
 
-                    setShowForm(false);
-                    setConflicts([]);
-                    setEditingId(null);
+                    const data = await res.json();
 
-                    // optional reset form
-                    setForm({
-                        vehicleId: "",
-                        driverId: "",
-                        requestor: "",
-                        affiliationId: "",
-                        date: "",
-                        purpose: "",
-                        destination: "",
-                    });
-                } else {
-                    alert(data.message || "Failed to update vehicle booking");
+                    if (data.success) {
+                        setBookings(prev =>
+                            prev.map(b => b.id === editingId ? data.booking : b)
+                        );
+
+                        setEditingId(null);
+                        setShowForm(false);
+                        setConflicts([]);
+                    } else {
+                        alert(data.message || "Failed to update vehicle booking");
+                    }
+
+                } catch (error) {
+                    console.error("Error updating booking:", error);
+                    alert("Server error.");
                 }
-            } catch (error) {
-                console.error("Error updating booking:", error);
-                alert("Server error, could not update booking.");
+                setIsSubmitting(false);
+                return;
+
             }
 
-            return;
-        }
+            /* --------------------------------------------------
+               CREATE MODE
+            -------------------------------------------------- */
 
-        // CREATE MODE
-        let hasConflict = false;
+            for (const bookingTime of bookingsToCreate) {
 
-        try {
-            const res = await fetch(
-                `http://localhost:5000/api/vehicle-conflicts?vehicleId=${form.vehicleId}
-&start=${encodeURIComponent(newBooking.start_datetime)}
-&end=${encodeURIComponent(newBooking.end_datetime)}
-`
-            );
+                const newBooking = {
+                    vehicle_id: Number(form.vehicleId),
+                    driver_id: form.driverId ? Number(form.driverId) : null,
+                    requestor: form.requestor,
+                    department_id: Number(form.affiliationId),
+                    start_datetime: bookingTime.start_datetime,
+                    end_datetime: bookingTime.end_datetime,
+                    purpose: form.purpose,
+                    booker_id: Number(currentUserId),
+                    destination: form.destination,
+                };
 
-            const data = await res.json();
+                try {
+                    const res = await fetch(
+                        "http://localhost:5000/api/create-vehicle-booking",
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(newBooking),
+                        }
+                    );
 
-            if (data.success && data.bookings.length > 0) {
-                hasConflict = true;
-                setConflicts(data.bookings);
+                    const data = await res.json();
+
+                    if (!data.success) {
+
+                        const attempted = data.attempted;
+                        const attemptedStart = new Date(attempted.start_datetime).toLocaleString();
+                        const attemptedEnd = new Date(attempted.end_datetime).toLocaleString();
+
+                        let message = `You tried to book:\n${attemptedStart} → ${attemptedEnd}\n\n`;
+
+                        data.conflicts.forEach(c => {
+                            const start = new Date(c.start_datetime).toLocaleString();
+                            const end = new Date(c.end_datetime).toLocaleString();
+
+                            message += `Conflicts with:\n${start} → ${end}\n\n`;
+                        });
+
+                        alert(message);
+
+                        setIsSubmitting(false);   // ✅ FIX
+                        return;
+                    }
+
+
+
+
+                    setBookings(prev => [...prev, data.booking]);
+
+                } catch (error) {
+                    console.error("Error creating booking:", error);
+                    alert("Server error.");
+                    return;
+                }
             }
-        } catch (err) {
-            console.error("Error checking vehicle conflicts:", err);
-        }
 
-        if (hasConflict) {
-            alert("Conflict detected: This vehicle is already booked on that date.");
-            return;
-        }
+            /* --------------------------------------------------
+               RESET FORM AFTER SUCCESS
+            -------------------------------------------------- */
 
-        try {
-            const res = await fetch("http://localhost:5000/api/create-vehicle-booking", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(newBooking),
+            setForm({
+                vehicleId: "",
+                driverId: "",
+                requestor: "",
+                affiliationId: "",
+                startDate: "",
+                startTime: "",
+                endDate: "",
+                endTime: "",
+                purpose: "",
+                destination: "",
             });
 
-            const data = await res.json();
-
-            if (data.success) {
-                // ✅ append returned booking (contains id)
-                setBookings((prev) => [...prev, data.booking]);
-
-                setForm({
-                    vehicleId: "",
-                    driverId: "",
-                    requestor: "",
-                    affiliationId: "",
-                    date: "",
-                    purpose: "",
-                    destination: "",
-                });
-
-                setShowForm(false);
-                setConflicts([]);
-            } else {
-                alert(data.message || "Failed to create vehicle booking");
-            }
-        } catch (error) {
-            console.error("Error submitting booking:", error);
-            alert("Server error, could not create booking.");
+            setSpecificDates([
+                { date: "", startTime: "", endTime: "" }
+            ]);
+            setShowForm(false);
+            setConflicts([]);
+            setIsSubmitting(false);
+        } finally {
+            setIsSubmitting(false);
         }
     };
+
 
 
     useEffect(() => {
@@ -625,6 +743,7 @@ export default function VehicleBooking() {
     }
 
     const handleEdit = (index) => {
+        setBookingMode("single");
         const b = bookings[index];
         setEditingId(b.id);
 
@@ -832,51 +951,246 @@ export default function VehicleBooking() {
                                     ))}
                                 </select>
                             </div>
+                            <div className="mb-6">
+                                <label className="block text-sm font-medium mb-2">Booking Mode*</label>
 
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Start*</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="date"
-                                        name="startDate"
-                                        min={minDate}
-                                        value={form.startDate}
-                                        onChange={handleChange}
-                                        className="border rounded px-3 py-2 w-full"
-                                        required
-                                    />
-                                    <input
-                                        type="time"
-                                        name="startTime"
-                                        value={form.startTime}
-                                        onChange={handleChange}
-                                        className="border rounded px-3 py-2 w-full"
-                                        required
-                                    />
+                                <div className="flex gap-6">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            value="single"
+                                            checked={bookingMode === "single"}
+                                            onChange={() => setBookingMode("single")}
+                                        />
+                                        <span>Single Day</span>
+                                    </label>
+
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            value="specific"
+                                            checked={bookingMode === "specific"}
+                                            onChange={() => setBookingMode("specific")}
+                                        />
+                                        <span> Specific Days</span>
+                                    </label>
+
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            value="range"
+                                            checked={bookingMode === "range"}
+                                            onChange={() => setBookingMode("range")}
+                                        />
+                                        <span>Range</span>
+                                    </label>
                                 </div>
-
-                                <label className="block text-sm font-medium mb-1 mt-4">End*</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="date"
-                                        name="endDate"
-                                        min={form.startDate || minDate}
-                                        value={form.endDate}
-                                        onChange={handleChange}
-                                        className="border rounded px-3 py-2 w-full"
-                                        required
-                                    />
-                                    <input
-                                        type="time"
-                                        name="endTime"
-                                        value={form.endTime}
-                                        onChange={handleChange}
-                                        className="border rounded px-3 py-2 w-full"
-                                        required
-                                    />
-                                </div>
-
                             </div>
+
+                            {bookingMode === "single" && (
+                                <div className="md:col-span-2">
+                                    <div className="grid md:grid-cols-3 gap-4 items-end">
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Date*</label>
+                                            <input
+                                                type="date"
+                                                value={form.startDate}
+                                                min={minDate}
+                                                onChange={(e) =>
+                                                    setForm({
+                                                        ...form,
+                                                        startDate: e.target.value,
+                                                        endDate: e.target.value
+                                                    })
+                                                }
+                                                className={inputClass}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Start Time*</label>
+                                            <input
+                                                type="time"
+                                                name="startTime"
+                                                value={form.startTime}
+                                                onChange={handleChange}
+                                                className={inputClass}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">End Time*</label>
+                                            <input
+                                                type="time"
+                                                name="endTime"
+                                                value={form.endTime}
+                                                onChange={handleChange}
+                                                className={inputClass}
+                                                required
+                                            />
+                                        </div>
+
+                                    </div>
+                                </div>
+                            )}
+
+                            {bookingMode === "specific" && (
+                                <div className="md:col-span-2 space-y-4">
+
+                                    {specificDates.map((entry, index) => (
+                                        <div
+                                            key={index}
+                                            className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm"
+                                        >
+
+                                            <div className="grid md:grid-cols-4 gap-4 items-end">
+
+                                                <div>
+                                                    <label className="block text-sm font-medium mb-1">Date*</label>
+                                                    <input
+                                                        type="date"
+                                                        value={entry.date}
+                                                        min={minDate}
+                                                        onChange={(e) => {
+                                                            const updated = [...specificDates];
+                                                            updated[index].date = e.target.value;
+                                                            setSpecificDates(updated);
+                                                        }}
+                                                        className={inputClass}
+                                                        required
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-medium mb-1">Start*</label>
+                                                    <input
+                                                        type="time"
+                                                        value={entry.startTime}
+                                                        onChange={(e) => {
+                                                            const updated = [...specificDates];
+                                                            updated[index].startTime = e.target.value;
+                                                            setSpecificDates(updated);
+                                                        }}
+                                                        className={inputClass}
+                                                        required
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-sm font-medium mb-1">End*</label>
+                                                    <input
+                                                        type="time"
+                                                        value={entry.endTime}
+                                                        onChange={(e) => {
+                                                            const updated = [...specificDates];
+                                                            updated[index].endTime = e.target.value;
+                                                            setSpecificDates(updated);
+                                                        }}
+                                                        className={inputClass}
+                                                        required
+                                                    />
+                                                </div>
+
+                                                <div className="flex items-end">
+                                                    {specificDates.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setSpecificDates(
+                                                                    specificDates.filter((_, i) => i !== index)
+                                                                )
+                                                            }
+                                                            className="w-full bg-red-50 text-red-600 border border-red-200 rounded-lg py-2 hover:bg-red-100 transition"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setSpecificDates([
+                                                ...specificDates,
+                                                { date: "", startTime: "", endTime: "" }
+                                            ])
+                                        }
+                                        className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-lg hover:bg-blue-100 transition"
+                                    >
+                                        + Add Date
+                                    </button>
+
+                                </div>
+                            )}
+
+
+                            {bookingMode === "range" && (
+                                <div className="md:col-span-2">
+                                    <div className="grid md:grid-cols-4 gap-4 items-end">
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Start Date*</label>
+                                            <input
+                                                type="date"
+                                                name="startDate"
+                                                min={minDate}
+                                                value={form.startDate}
+                                                onChange={handleChange}
+                                                className={inputClass}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">End Date*</label>
+                                            <input
+                                                type="date"
+                                                name="endDate"
+                                                min={form.startDate || minDate}
+                                                value={form.endDate}
+                                                onChange={handleChange}
+                                                className={inputClass}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Start Time*</label>
+                                            <input
+                                                type="time"
+                                                name="startTime"
+                                                value={form.startTime}
+                                                onChange={handleChange}
+                                                className={inputClass}
+                                                required
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">End Time*</label>
+                                            <input
+                                                type="time"
+                                                name="endTime"
+                                                value={form.endTime}
+                                                onChange={handleChange}
+                                                className={inputClass}
+                                                required
+                                            />
+                                        </div>
+
+                                    </div>
+                                </div>
+                            )}
+
+
+
                         </div>
                         <div className='flex '>
                             <div className="mb-6 w-full mr-5">
@@ -926,9 +1240,15 @@ export default function VehicleBooking() {
                             </select>
                         </div>
                         <div className="flex gap-3 justify-end">
-                            <button type="submit" className="bg-[#96161C] text-white px-8 py-2 rounded-lg">
-                                {editingId !== null ? 'Save' : 'Create'}
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className={`px-8 py-2 rounded-lg text-white ${isSubmitting ? "bg-gray-400" : "bg-[#96161C]"
+                                    }`}
+                            >
+                                {editingId !== null ? 'Save' : isSubmitting ? 'Processing...' : 'Create'}
                             </button>
+
                             <button
                                 type="button"
                                 onClick={() => setShowForm(false)}
