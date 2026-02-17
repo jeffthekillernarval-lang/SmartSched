@@ -100,8 +100,6 @@ app.use('/api/create-vehicle-booking', createNewVehicleBooking);
 app.use('/api/create-booking', createBookingRoute);
 app.use('/api/vehicle-booking', vehicleBookingRoute);
 app.use('/api/create-equipment', createequipmentRoute);
-
-
 // UPDATE
 app.use('/api/update-booking-status', updateBookingStatusRoute);
 // CANCEL
