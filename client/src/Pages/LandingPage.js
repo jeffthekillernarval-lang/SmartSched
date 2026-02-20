@@ -53,7 +53,7 @@ export default function LandingPage() {
     const [showChatbot, setShowChatbot] = useState(false);
     const [chatInput, setChatInput] = useState('');
     const [chatMessages, setChatMessages] = useState([
-        { from: 'bot', text: 'Hi! How can I help you today?, `\n`Would u like to book a Facility or Vehicle for an event?' }
+        { from: 'bot', text: 'Hi! How can I help you today?, `\n`Would u like to book a Facility, Vehicle or Equipment for an event?' }
     ]);
     const [isManagementOpen, setIsManagementOpen] = useState(true);
     const [isEquipmentOpen, setisEquipmentOpen] = useState(true);
@@ -71,6 +71,31 @@ export default function LandingPage() {
 
         return allowedSidebarItems.includes(key);
     };
+    const [chatSize, setChatSize] = useState({ width: 820, height: 650 });
+    const [chatPosition, setChatPosition] = useState({ x: window.innerWidth - 900, y: 120 });
+    const [isResizing, setIsResizing] = useState(false);
+
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!isResizing) return;
+
+            setChatSize(prev => ({
+                width: Math.max(350, prev.width + e.movementX),
+                height: Math.max(400, prev.height + e.movementY),
+            }));
+        };
+
+        const stopResize = () => setIsResizing(false);
+
+        window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mouseup", stopResize);
+
+        return () => {
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", stopResize);
+        };
+    }, [isResizing]);
+
 
     const toggleChatBot = () => setShowChatbot(!showChatbot);
     useEffect(() => {
@@ -411,21 +436,59 @@ export default function LandingPage() {
 
             {/* Chatbot Interface */}
             {showChatbot && (
-                <div className="fixed bottom-20 right-6 w-[820px] h-[650px] bg-white border rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
+                <div
+                    className="fixed bottom-20 right-6 z-50
+             bg-white rounded-2xl
+             shadow-[0_20px_60px_rgba(0,0,0,0.25)]
+             border border-gray-200
+             flex flex-col"
+                    style={{
+                        width: "820px",
+                        height: "650px",
+                        minWidth: "400px",
+                        minHeight: "450px",
+                        resize: "both",
+                        overflow: "hidden"   // 👈 IMPORTANT
+                    }}
+                >
+
                     {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b bg-[#96161C] text-white">
-                        <h2 className="font-semibold text-lg">Booking Assistant</h2>
-                        <button onClick={() => setShowChatbot(false)} className="text-white hover:text-gray-300">✖</button>
+                    <div className="relative flex items-center justify-between px-5 py-3 
+                bg-gradient-to-r from-[#7a1014] to-[#c21d24] 
+                text-white shadow-md">
+
+                        {/* Mac-style window dots */}
+                        <div className="flex gap-2 absolute left-4">
+                            <span className="w-3 h-3 bg-red-400 rounded-full"></span>
+                            <span className="w-3 h-3 bg-yellow-400 rounded-full"></span>
+                            <span className="w-3 h-3 bg-green-400 rounded-full"></span>
+                        </div>
+
+                        <h2 className="w-full text-center font-semibold text-lg tracking-wide">
+                            Booking Assistant
+                        </h2>
+
+                        <button
+                            onClick={() => setShowChatbot(false)}
+                            className="text-white hover:opacity-70 text-sm"
+                        >
+                            ✕
+                        </button>
                     </div>
 
+
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gradient-to-b from-gray-50 to-gray-100
+">
                         {chatMessages.map((msg, index) => (
                             <div key={index} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`px-4 py-2 rounded-lg text-sm max-w-[70%] break-words whitespace-pre-line
-                                    ${msg.from === 'user'
-                                        ? 'bg-blue-600 text-white rounded-br-none'
-                                        : 'bg-gray-200 text-gray-800 rounded-bl-none'}`}>
+                                <div className={`px-4 py-3 rounded-2xl text-sm 
+    max-w-[75%] break-words whitespace-pre-line
+    shadow-sm
+    ${msg.from === 'user'
+                                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-md'
+                                        : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md'}`}
+                                >
                                     {msg.text}
                                 </div>
                             </div>
@@ -457,6 +520,13 @@ export default function LandingPage() {
                             Send
                         </button>
                     </div>
+                    <div
+                        onMouseDown={() => setIsResizing(true)}
+                        className="absolute bottom-2 right-2 w-4 h-4 cursor-se-resize"
+                    >
+                        <div className="w-full h-full border-r-2 border-b-2 border-gray-400"></div>
+                    </div>
+
                 </div>
             )}
         </div>

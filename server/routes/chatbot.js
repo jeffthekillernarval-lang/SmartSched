@@ -32,6 +32,12 @@ router.post("/", async (req, res) => {
         const [monthWord, day] = text.toLowerCase().split(" ");
         return `${year}-${months[monthWord]}-${day.padStart(2, "0")}`;
     }
+    function toLocalISO(dateObj) {
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+        const day = String(dateObj.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    }
 
     // const { message, bookings = {}, currentDateTime } = req.body;
     // const formattedBookings = [];
@@ -68,7 +74,7 @@ router.post("/", async (req, res) => {
             FROM "VehicleBooking"
             WHERE vehicle_id = $1
               AND deleted = false
-              AND $2 = ANY(dates)
+              AND DATE(start_datetime) = $2
             LIMIT 1
             `,
                 [String(v.id), dateISO]
@@ -178,7 +184,8 @@ router.post("/", async (req, res) => {
         formattedBookings.push(
             `- Latest Vehicle Booking:
   Vehicle: ${b.vehicle_name || `Vehicle ${b.vehicle_id}`}
-  Date(s): ${Array.isArray(b.dates) ? b.dates.join(", ") : "N/A"}
+  Date: ${b.start_datetime?.toISOString().split("T")[0] || "N/A"}
+Time: ${b.start_datetime?.toISOString().slice(11, 16)}–${b.end_datetime?.toISOString().slice(11, 16)}
   Purpose: ${b.purpose || "N/A"}
   Destination: ${b.destination || "N/A"}`
         );
@@ -220,6 +227,45 @@ router.post("/", async (req, res) => {
             );
         });
     }
+    // ==================================================
+    // FACILITY AVAILABILITY (REAL DB CHECK)
+    // ==================================================
+
+    if (dateMatch) {
+
+        const dateISO = parseMonthDayToISO(dateMatch[0]);
+        const messageLower = message.toLowerCase();
+
+        for (const f of Object.values(facilityMap)) {
+
+            if (!messageLower.includes(f.name.toLowerCase())) continue;
+
+            const bookingResult = await pool.query(
+                `
+            SELECT event_name, starting_time, ending_time
+            FROM "Booking"
+            WHERE event_facility = $1
+              AND event_date = $2
+              AND deleted = false
+            `,
+                [f.id, dateISO]
+            );
+
+            if (bookingResult.rowCount > 0) {
+                const b = bookingResult.rows[0];
+
+                formattedBookings.push(
+                    `- ${f.name} is ❌ BOOKED on ${dateISO}
+  Time: ${b.starting_time.slice(0, 5)}–${b.ending_time.slice(0, 5)}
+  Event: ${b.event_name}`
+                );
+            } else {
+                formattedBookings.push(
+                    `- ${f.name} is ✅ AVAILABLE on ${dateISO}`
+                );
+            }
+        }
+    }
 
     /* ==================================================
        SYSTEM PROMPT
@@ -258,15 +304,22 @@ VEHICLE:
   "driver_id": null,
   "requestor": "",
   "department_id": "number",
-  "dates": ["YYYY-MM-DD"],
+  "schedule": {
+     "date": "YYYY-MM-DD",
+     "startTime": "HH:MM",
+     "endTime": "HH:MM"
+  },
   "purpose": "",
   "destination": ""
 }
-  EQUIPMENT:
+EQUIPMENT:
 {
   "intent": "create_booking",
   "resource_type": "equipment",
-  "equipments": [{ "equipmentId": "number", "quantity": 1 }]
+  "equipments": [
+    { "equipmentId": "number" }
+  ],
+  "quantity": "number",
   "department_id": "number",
   "facility_id": "number",
   "dates": ["YYYY-MM-DD"],
@@ -319,12 +372,375 @@ ${formattedBookings.join("\n") || "None"}
             bookingData = JSON.parse(jsonMatch[0]);
         } catch { }
     }
-
     /* ==================================================
        CREATE BOOKING
     ================================================== */
 
     if (bookingData?.intent === "create_booking") {
+        // ==================================================
+        // EQUIPMENT NAME → EQUIPMENT ID (FACILITY STYLE)
+        // ==================================================
+        if (bookingData.resource_type === "equipment") {
+
+            const equipmentsResult = await pool.query(
+                `SELECT id, name FROM "Equipments" WHERE enabled = true`
+            );
+
+            const messageLower = message.toLowerCase();
+
+            const matchedEquipments = [];
+
+            for (const eq of equipmentsResult.rows) {
+
+                const eqName = eq.name.toLowerCase();
+
+                const regex = new RegExp(
+                    `\\b${eqName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`,
+                    "i"
+                );
+
+                if (regex.test(messageLower)) {
+                    matchedEquipments.push({
+                        equipmentId: eq.id,
+                        quantity: bookingData.quantity || 1
+                    });
+                }
+            }
+
+            if (matchedEquipments.length === 0) {
+                return res.json({
+                    reply:
+                        "❌ Equipment could not be identified.\n\n" +
+                        "Please provide the exact equipment name."
+                });
+            }
+
+            bookingData.equipments = matchedEquipments;
+        }
+        // ==================================================
+        // VEHICLE NAME → VEHICLE ID (FACILITY STYLE)
+        // ==================================================
+        if (bookingData.resource_type === "vehicle") {
+
+            const vehiclesResult = await pool.query(
+                `SELECT id, vehicle_name FROM "Vehicles" WHERE enabled = true`
+            );
+
+            const messageLower = message.toLowerCase();
+
+            let matchedVehicle = null;
+
+            for (const v of vehiclesResult.rows) {
+
+                const vehicleName = v.vehicle_name.toLowerCase();
+
+                const regex = new RegExp(
+                    `\\b${vehicleName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`,
+                    "i"
+                );
+
+                if (regex.test(messageLower)) {
+                    matchedVehicle = v;
+                    break;
+                }
+            }
+
+            if (!matchedVehicle) {
+                return res.json({
+                    reply:
+                        "❌ Vehicle could not be identified.\n\n" +
+                        "Please provide the exact vehicle name (e.g., Hilux, Bus, Van)."
+                });
+            }
+
+            // 🔥 ALWAYS override AI value
+            bookingData.vehicle_id = matchedVehicle.id;
+        }
+        // ==================================================
+        // DEPARTMENT NAME → DEPARTMENT ID (FACILITY STYLE)
+        // ==================================================
+        if (bookingData.resource_type === "vehicle") {
+
+            const deptResult = await pool.query(
+                `SELECT id, meaning FROM "Affiliations"`
+            );
+
+            const messageLower = message.toLowerCase();
+
+            let matchedDept = null;
+
+            for (const d of deptResult.rows) {
+
+                const abbrev = d.abbreviation?.toLowerCase() || "";
+                const meaning = d.meaning?.toLowerCase() || "";
+
+                if (
+                    messageLower.includes(abbrev) ||
+                    messageLower.includes(meaning)
+                ) {
+                    matchedDept = d;
+                    break;
+                }
+
+                if (regex.test(messageLower)) {
+                    matchedDept = d;
+                    break;
+                }
+            }
+
+            if (!matchedDept) {
+                return res.json({
+                    reply:
+                        "❌ Department could not be identified.\n\n" +
+                        "Please provide the exact department name."
+                });
+            }
+
+            bookingData.department_id = matchedDept.id;
+        }
+        // ==================================================
+        // DEPARTMENT NAME → DEPARTMENT ID (FOR EQUIPMENT)
+        // ==================================================
+        if (bookingData.resource_type === "equipment") {
+
+            const deptResult = await pool.query(
+                `SELECT id, abbreviation, meaning FROM "Affiliations" WHERE enabled = true`
+            );
+
+            const messageLower = message.toLowerCase();
+
+            let matchedDept = null;
+
+            for (const d of deptResult.rows) {
+
+                const abbrev = d.abbreviation?.toLowerCase() || "";
+                const meaning = d.meaning?.toLowerCase() || "";
+
+                if (
+                    messageLower.includes(abbrev) ||
+                    messageLower.includes(meaning)
+                ) {
+                    matchedDept = d;
+                    break;
+                }
+            }
+
+            if (!matchedDept) {
+                return res.json({
+                    reply:
+                        "❌ Department could not be identified.\n\n" +
+                        "Please provide the exact department name."
+                });
+            }
+
+            bookingData.department_id = matchedDept.id;
+        }
+        // ==================================================
+        // FACILITY NAME → FACILITY ID (FOR EQUIPMENT)
+        // ==================================================
+        if (bookingData.resource_type === "equipment") {
+
+            const facilitiesResult = await pool.query(
+                `SELECT id, name FROM "Facilities" WHERE enabled = true`
+            );
+
+            const messageLower = message.toLowerCase();
+
+            let matchedFacility = null;
+
+            for (const f of facilitiesResult.rows) {
+
+                const facilityName = f.name.toLowerCase();
+
+                const regex = new RegExp(
+                    `\\b${facilityName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`,
+                    "i"
+                );
+
+                if (regex.test(messageLower)) {
+                    matchedFacility = f;
+                    break;
+                }
+            }
+
+            if (!matchedFacility) {
+                return res.json({
+                    reply:
+                        "❌ Facility could not be identified.\n\n" +
+                        "Please provide the exact facility name."
+                });
+            }
+
+            bookingData.facility_id = matchedFacility.id;
+        }
+        // ==================================================
+        // STRICT FIELD VALIDATION
+        // ==================================================
+
+        let missingFields = [];
+
+        if (bookingData.resource_type === "facility") {
+
+            if (!bookingData.event_name) missingFields.push("Event Name");
+            if (!bookingData.event_facility) missingFields.push("Facility");
+            if (!bookingData.requested_by) missingFields.push("Requested By");
+            if (!bookingData.organization) missingFields.push("Organization / Department");
+            if (!bookingData.contact) missingFields.push("Contact");
+
+            if (!Array.isArray(bookingData.schedules) || bookingData.schedules.length === 0) {
+                missingFields.push("Schedule (Date and Time)");
+            } else {
+                bookingData.schedules.forEach((s, index) => {
+                    if (!s.date) missingFields.push(`Schedule ${index + 1} Date`);
+                    if (!s.startTime) missingFields.push(`Schedule ${index + 1} Start Time`);
+                    if (!s.endTime) missingFields.push(`Schedule ${index + 1} End Time`);
+                });
+            }
+        }
+
+        if (bookingData.resource_type === "vehicle") {
+
+            if (!bookingData.vehicle_id) missingFields.push("Vehicle");
+            if (!bookingData.requestor) missingFields.push("Requestor");
+            if (!bookingData.department_id) missingFields.push("Department");
+            if (!bookingData.schedule?.date)
+                missingFields.push("Date");
+
+            if (!bookingData.schedule?.startTime)
+                missingFields.push("Start Time");
+
+            if (!bookingData.schedule?.endTime)
+                missingFields.push("End Time");
+            if (!bookingData.purpose) missingFields.push("Purpose");
+            if (!bookingData.destination) missingFields.push("Destination");
+        }
+        if (bookingData.resource_type === "equipment") {
+            bookingData.departmentId = bookingData.department_id;
+            bookingData.facilityId = bookingData.facility_id;
+            bookingData.timeStart = bookingData.time_start;
+            bookingData.timeEnd = bookingData.time_end;
+
+            delete bookingData.department_id;
+            delete bookingData.facility_id;
+            delete bookingData.time_start;
+            delete bookingData.time_end;
+        }
+        if (bookingData.resource_type === "equipment") {
+
+            if (!Array.isArray(bookingData.equipments) || bookingData.equipments.length === 0)
+                missingFields.push("Equipment Selection");
+
+            if (!bookingData.departmentId)
+                missingFields.push("Department");
+
+            if (!bookingData.facilityId)
+                missingFields.push("Facility");
+
+            if (!Array.isArray(bookingData.dates) || bookingData.dates.length === 0)
+                missingFields.push("Date");
+
+            if (!bookingData.timeStart)
+                missingFields.push("Start Time");
+
+            if (!bookingData.timeEnd)
+                missingFields.push("End Time");
+
+            if (!bookingData.purpose)
+                missingFields.push("Purpose");
+        }
+
+        // If anything missing → STOP
+        if (missingFields.length > 0) {
+            return res.json({
+                reply:
+                    `❌ Your booking request is incomplete.\n\n` +
+                    `Missing fields:\n` +
+                    missingFields.map(f => `• ${f}`).join("\n") +
+                    `\n\nPlease resend the FULL booking request including all required details.`
+            });
+        }
+        // ==================================================
+        // FACILITY CONFLICT PRE-CHECK (BEFORE BACKEND CALL)
+        // ==================================================
+
+        if (bookingData.resource_type === "facility") {
+
+            for (const s of bookingData.schedules) {
+
+                const conflictCheck = await pool.query(
+                    `
+            SELECT event_name, starting_time, ending_time
+            FROM "Booking"
+            WHERE event_facility = $1
+              AND event_date = $2
+              AND deleted = false
+              AND (
+                starting_time < $4
+                AND ending_time > $3
+              )
+            LIMIT 1
+            `,
+                    [
+                        bookingData.event_facility,
+                        s.date,
+                        s.startTime,
+                        s.endTime
+                    ]
+                );
+
+                if (conflictCheck.rowCount > 0) {
+
+                    const conflict = conflictCheck.rows[0];
+
+                    return res.json({
+                        reply:
+                            `❌ Booking conflict detected.\n\n` +
+                            `Existing booking:\n` +
+                            `• Event: ${conflict.event_name}\n` +
+                            `• Time: ${conflict.starting_time.slice(0, 5)}–${conflict.ending_time.slice(0, 5)}\n\n` +
+                            `Please resend the FULL booking with a different time or date.`
+                    });
+                }
+            }
+        }
+        // ==================================================
+        // VEHICLE CONFLICT PRE-CHECK (BEFORE BACKEND CALL)
+        // ==================================================
+        if (bookingData.resource_type === "vehicle") {
+
+            const { date, startTime, endTime } = bookingData.schedule;
+
+            const conflictCheck = await pool.query(
+                `
+                SELECT 1
+                FROM "VehicleBooking"
+                WHERE vehicle_id = $1
+                AND deleted = false
+                AND DATE(start_datetime) = $2
+                AND (
+                    start_datetime::time < $4
+                    AND end_datetime::time > $3
+                )
+                LIMIT 1
+                `,
+                [
+                    bookingData.vehicle_id,
+                    date,
+                    startTime,
+                    endTime
+                ]
+            );
+
+            if (conflictCheck.rowCount > 0) {
+                return res.json({
+                    reply:
+                        `❌ Vehicle conflict detected.\n\n` +
+                        `The vehicle is already booked on ${date} between ${startTime}–${endTime}.\n\n` +
+                        `Please resend the FULL booking with a different time or date.`
+                });
+            }
+        }
+
         try {
             let endpoint = "";
 
@@ -332,66 +748,82 @@ ${formattedBookings.join("\n") || "None"}
                 endpoint = "/api/create-booking";
             if (bookingData.resource_type === "vehicle")
                 endpoint = "/api/create-vehicle-booking";
-
+            if (bookingData.resource_type === "equipment")
+                endpoint = "/api/create-equipment-booking";
             if (!endpoint) throw new Error("Unknown resource type");
             /* ==================================================
                EQUIPMENT NAME → EQUIPMENT ID (DYNAMIC)
             ================================================== */
 
-            if (
-                bookingData.resource_type === "equipment" &&
-                (!bookingData.equipment_type_id || isNaN(Number(bookingData.equipment_type_id)))
-            ) {
-                const equipmentsResult = await pool.query(
-                    `SELECT id, name FROM "Equipments" WHERE enabled = true`
-                );
+            // if (
+            //     bookingData.resource_type === "equipment" &&
+            //     (!bookingData.equipment_type_id || isNaN(Number(bookingData.equipment_type_id)))
+            // ) {
+            //     const equipmentsResult = await pool.query(
+            //         `SELECT id, name FROM "Equipments" WHERE enabled = true`
+            //     );
 
-                const messageLower = message.toLowerCase();
+            //     const messageLower = message.toLowerCase();
 
-                for (const eq of equipmentsResult.rows) {
-                    if (messageLower.includes(eq.name.toLowerCase())) {
-                        bookingData.equipment_type_id = eq.id;
-                        break;
-                    }
-                }
-            }
+            //     for (const eq of equipmentsResult.rows) {
+            //         if (messageLower.includes(eq.name.toLowerCase())) {
+            //             bookingData.equipment_type_id = eq.id;
+            //             break;
+            //         }
+            //     }
+            // }
 
-            if (
-                bookingData.resource_type === "equipment" &&
-                (!bookingData.equipment_type_id || isNaN(Number(bookingData.equipment_type_id)))
-            ) {
-                throw new Error(
-                    "Equipment could not be identified. Please specify the equipment name."
-                );
-            }
+            // if (
+            //     bookingData.resource_type === "equipment" &&
+            //     (!bookingData.equipment_type_id || isNaN(Number(bookingData.equipment_type_id)))
+            // ) {
+            //     throw new Error(
+            //         "Equipment could not be identified. Please specify the equipment name."
+            //     );
+            // }
             /* ==================================================
                FACILITY NAME → FACILITY ID (DYNAMIC, SUPPORTS NUMBERS)
             ================================================== */
-            if (
-                bookingData.resource_type === "facility" &&
-                (!bookingData.event_facility || isNaN(Number(bookingData.event_facility)))
-            ) {
+            if (bookingData.resource_type === "facility") {
+
                 const facilitiesResult = await pool.query(
                     `SELECT id, name FROM "Facilities" WHERE enabled = true`
                 );
 
                 const messageLower = message.toLowerCase();
 
+                let matchedFacility = null;
+
                 for (const f of facilitiesResult.rows) {
+
                     const facilityName = f.name.toLowerCase();
 
-                    // Exact match OR word-boundary-safe match
-                    const regex = new RegExp(`\\b${facilityName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`, "i");
+                    const regex = new RegExp(
+                        `\\b${facilityName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&")}\\b`,
+                        "i"
+                    );
 
                     if (regex.test(messageLower)) {
-                        bookingData.event_facility = f.id;
+                        matchedFacility = f;
                         break;
                     }
                 }
+
+                if (!matchedFacility) {
+                    return res.json({
+                        reply:
+                            "❌ Facility could not be identified.\n\n" +
+                            "Please provide the exact facility name (e.g., M116, HE Hall, Gymnasium)."
+                    });
+                }
+
+                // 🔥 ALWAYS override AI value
+                bookingData.event_facility = matchedFacility.id;
             }
+
             if (
                 bookingData.resource_type === "facility" &&
-                (!bookingData.event_facility || isNaN(Number(bookingData.event_facility)))
+                (!bookingData.event_facility)
             ) {
                 throw new Error(
                     "Facility could not be identified. Please specify the exact facility name (e.g., M116, N-206, Gymnasium)."
@@ -408,36 +840,24 @@ ${formattedBookings.join("\n") || "None"}
                VEHICLE NAME → VEHICLE ID (DYNAMIC, NO HARD-CODE)
             ================================================== */
 
+
             if (
-                bookingData.resource_type === "vehicle" &&
-                (!bookingData.vehicle_id || isNaN(Number(bookingData.vehicle_id)))
-            ) {
-                // Fetch all enabled vehicles
-                const vehiclesResult = await pool.query(
-                    `SELECT id, vehicle_name FROM "Vehicles" WHERE enabled = true`
-                );
-
-                const messageLower = message.toLowerCase();
-
-                for (const v of vehiclesResult.rows) {
-                    const name = v.vehicle_name.toLowerCase();
-
-                    // Simple but effective name match
-                    if (messageLower.includes(name)) {
-                        bookingData.vehicle_id = v.id;
-                        break;
-                    }
-                }
-            }
-            if (
-                bookingData.resource_type === "vehicle" &&
+                bookingData?.resource_type === "vehicle" &&
                 (!bookingData.vehicle_id || isNaN(Number(bookingData.vehicle_id)))
             ) {
                 throw new Error(
                     "Vehicle could not be identified. Please specify the vehicle name."
                 );
             }
+            if (bookingData.resource_type === "vehicle") {
 
+                const { date, startTime, endTime } = bookingData.schedule;
+
+                bookingData.start_datetime = `${date}T${startTime}`;
+                bookingData.end_datetime = `${date}T${endTime}`;
+
+                delete bookingData.schedule;
+            }
             const response = await axios.post(
                 `http://localhost:5000${endpoint}`,
                 bookingData
@@ -548,23 +968,25 @@ ${formattedBookings.join("\n") || "None"}
                 const availableDates = [];
 
                 for (let i = 1; i <= LOOKAHEAD_DAYS; i++) {
-                    const d = new Date(baseDate);
-                    d.setDate(d.getDate() + i);
-                    const isoDate = d.toISOString().slice(0, 10);
+
+                    const d = new Date(baseDate);   // ✅ recreate each time
+                    d.setDate(d.getDate() + i);     // ✅ increment properly
+
+                    const isoDate = toLocalISO(d);  // ✅ safe local date
 
                     const conflictCheck = await pool.query(
                         `
-      SELECT 1
-      FROM "Booking"
-      WHERE event_facility = $1
-        AND event_date = $2
-        AND deleted = false
-        AND (
-          starting_time < $4
-          AND ending_time > $3
-        )
-      LIMIT 1
-      `,
+        SELECT 1
+        FROM "Booking"
+        WHERE event_facility = $1
+          AND event_date = $2
+          AND deleted = false
+          AND (
+            starting_time < $4
+            AND ending_time > $3
+          )
+        LIMIT 1
+        `,
                         [facilityId, isoDate, start, end]
                     );
 
@@ -574,6 +996,7 @@ ${formattedBookings.join("\n") || "None"}
 
                     if (availableDates.length >= 3) break;
                 }
+
 
                 if (availableDates.length > 0) {
                     reply += `\n\n📅 Other available dates for this facility:`;
