@@ -11,8 +11,28 @@ const pool = new Pool({
 
 router.post("/", async (req, res) => {
     const { message, bookings = {}, currentDateTime } = req.body;
-    const formattedBookings = [];
+    // PREVENT , AI resend
+    const cleanMessage = message?.trim();
 
+    if (!cleanMessage || cleanMessage === "," || cleanMessage.length < 2) {
+        return res.json({ reply: "" });
+    }
+    const formattedBookings = [];
+    function formatTime12(timeStr) {
+        const [hour, minute] = timeStr.split(":").map(Number);
+        const ampm = hour >= 12 ? "PM" : "AM";
+        const h = hour % 12 === 0 ? 12 : hour % 12;
+        return `${h}:${minute.toString().padStart(2, "0")} ${ampm}`;
+    }
+
+    function formatPrettyDate(isoDate) {
+        const d = new Date(isoDate);
+        return d.toLocaleDateString("en-US", {
+            month: "long",
+            day: "numeric",
+            year: "numeric"
+        });
+    }
     function parseMonthDayToISO(text, year = 2026) {
         const months = {
             january: "01",
@@ -334,7 +354,36 @@ Current time: ${currentDateTime}
 Existing bookings:
 ${formattedBookings.join("\n") || "None"}
 `;
+    // ==================================================
+    // EQUIPMENT BOOKING TEMPLATE WITH SUGGESTIONS
+    // ==================================================
+    if (message.toLowerCase().includes("equipment booking")) {
 
+        const suggestionResult = await pool.query(
+            `SELECT id, name, model_id 
+     FROM "Equipments" 
+     WHERE enabled = true 
+     LIMIT 6`
+        );
+
+        const suggestions = suggestionResult.rows
+            .map(e => `• ${e.name} (${e.model_id})`)
+            .join("\n");
+
+        return res.json({
+            reply:
+                `I can assist you with booking equipment.\n\n` +
+                `Here are some available equipments:\n${suggestions}\n\n` +
+                `Please provide the following details:\n\n` +
+                `1. Equipment Name(s)\n` +
+                `2. Quantity\n` +
+                `3. Department\n` +
+                `4. Facility\n` +
+                `5. Date(s)\n` +
+                `6. Start and End Time\n` +
+                `7. Purpose`
+        });
+    }
     /* ==================================================
        COHERE CHAT
     ================================================== */
@@ -692,13 +741,97 @@ ${formattedBookings.join("\n") || "None"}
 
                     const conflict = conflictCheck.rows[0];
 
+                    /* ========================================
+                       1️⃣ FIND NEXT AVAILABLE DATES (14 DAYS)
+                    ======================================== */
+
+                    const availableDates = [];
+                    const baseDate = new Date(s.date);
+
+                    for (let i = 1; i <= 14; i++) {
+                        const checkDate = new Date(baseDate);
+                        checkDate.setDate(baseDate.getDate() + i);
+
+                        const day = checkDate.getDay();
+
+                        // Monday–Friday only
+                        if (day === 0 || day === 6) continue;
+
+                        const dateStr = checkDate.toISOString().split("T")[0];
+
+                        const existing = await pool.query(
+                            `
+            SELECT 1 FROM "Booking"
+            WHERE event_facility = $1
+              AND event_date = $2
+              AND deleted = false
+            `,
+                            [bookingData.event_facility, dateStr]
+                        );
+
+                        if (existing.rowCount === 0) {
+                            availableDates.push(
+                                `• ${formatPrettyDate(dateStr)} (7:00 AM – 7:00 PM)`
+                            );
+                        }
+
+                        if (availableDates.length >= 5) break;
+                    }
+
+                    /* ========================================
+                       2️⃣ FIND ALTERNATE FACILITIES
+                    ======================================== */
+
+                    const currentFacility = facilityMap[bookingData.event_facility];
+
+                    let alternateFacilities = [];
+
+                    if (currentFacility) {
+
+                        const altResult = await pool.query(
+                            `
+            SELECT id, name, capacity
+            FROM "Facilities"
+            WHERE enabled = true
+              AND id != $1
+              AND capacity >= $2
+            LIMIT 5
+            `,
+                            [
+                                bookingData.event_facility,
+                                currentFacility.capacity || 0
+                            ]
+                        );
+
+                        alternateFacilities = altResult.rows.map(
+                            f => `• ${f.name} (capacity ${f.capacity})`
+                        );
+                    }
+
+                    /* ========================================
+                       3️⃣ RETURN SMART RESPONSE
+                    ======================================== */
+
                     return res.json({
                         reply:
                             `❌ Booking conflict detected.\n\n` +
-                            `Existing booking:\n` +
+                            `🏢 Facility: ${currentFacility?.name || bookingData.event_facility}\n` +
+                            `📅 Date: ${formatPrettyDate(s.date)}\n` +
+                            `⏰ Requested Time: ${formatTime12(s.startTime)} – ${formatTime12(s.endTime)}\n\n` +
+
+                            `🔴 Conflicts With:\n` +
                             `• Event: ${conflict.event_name}\n` +
-                            `• Time: ${conflict.starting_time.slice(0, 5)}–${conflict.ending_time.slice(0, 5)}\n\n` +
-                            `Please resend the FULL booking with a different time or date.`
+                            `• Time: ${formatTime12(conflict.starting_time.slice(0, 5))} – ${formatTime12(conflict.ending_time.slice(0, 5))}\n\n` +
+
+                            (availableDates.length
+                                ? `📆 Other Available Dates (Mon–Fri, 6AM–7PM):\n${availableDates.join("\n")}\n\n`
+                                : ``) +
+
+                            (alternateFacilities.length
+                                ? `🏢 Other Available Facilities:\n${alternateFacilities.join("\n")}\n\n`
+                                : ``) +
+
+                            `Please resend the FULL booking with your preferred option.`
                     });
                 }
             }
@@ -732,12 +865,241 @@ ${formattedBookings.join("\n") || "None"}
             );
 
             if (conflictCheck.rowCount > 0) {
+
+                /* ========================================
+                   1️⃣ FIND ALTERNATE DATES (NEXT 14 DAYS)
+                ======================================== */
+
+                const availableDates = [];
+                const baseDate = new Date(date);
+
+                for (let i = 1; i <= 14; i++) {
+
+                    const checkDate = new Date(baseDate);
+                    checkDate.setDate(baseDate.getDate() + i);
+
+                    const day = checkDate.getDay();
+                    if (day === 0 || day === 6) continue; // Mon–Fri
+
+                    const isoDate = checkDate.toISOString().split("T")[0];
+
+                    const conflictDateCheck = await pool.query(
+                        `
+            SELECT 1
+            FROM "VehicleBooking"
+            WHERE vehicle_id = $1
+              AND deleted = false
+              AND DATE(start_datetime) = $2
+              AND (
+                start_datetime::time < $4
+                AND end_datetime::time > $3
+              )
+            LIMIT 1
+            `,
+                        [bookingData.vehicle_id, isoDate, startTime, endTime]
+                    );
+
+                    if (conflictDateCheck.rowCount === 0) {
+                        availableDates.push(
+                            `• ${formatPrettyDate(isoDate)} (${formatTime12(startTime)} – ${formatTime12(endTime)})`
+                        );
+                    }
+
+                    if (availableDates.length >= 5) break;
+                }
+
+                /* ========================================
+                   2️⃣ FIND ALTERNATE VEHICLES
+                ======================================== */
+
+                const alternateVehicles = [];
+
+                const allVehicles = await pool.query(
+                    `SELECT id, vehicle_name FROM "Vehicles" WHERE enabled = true`
+                );
+
+                for (const v of allVehicles.rows) {
+
+                    if (v.id === bookingData.vehicle_id) continue;
+
+                    const vehicleConflict = await pool.query(
+                        `
+            SELECT 1
+            FROM "VehicleBooking"
+            WHERE vehicle_id = $1
+              AND deleted = false
+              AND DATE(start_datetime) = $2
+              AND (
+                start_datetime::time < $4
+                AND end_datetime::time > $3
+              )
+            LIMIT 1
+            `,
+                        [v.id, date, startTime, endTime]
+                    );
+
+                    if (vehicleConflict.rowCount === 0) {
+                        alternateVehicles.push(`• ${v.vehicle_name}`);
+                    }
+
+                    if (alternateVehicles.length >= 5) break;
+                }
+
+                /* ========================================
+                   3️⃣ RETURN CLEAN RESPONSE
+                ======================================== */
+
+                const vehicleName = vehicleMap[bookingData.vehicle_id] || `Vehicle ${bookingData.vehicle_id}`;
+
                 return res.json({
                     reply:
-                        `❌ Vehicle conflict detected.\n\n` +
-                        `The vehicle is already booked on ${date} between ${startTime}–${endTime}.\n\n` +
-                        `Please resend the FULL booking with a different time or date.`
+                        `❌ Vehicle booking conflict detected.\n\n` +
+
+                        `🚗 Vehicle: ${vehicleName}\n` +
+                        `📅 Date: ${formatPrettyDate(date)}\n` +
+                        `⏰ Requested Time: ${formatTime12(startTime)} – ${formatTime12(endTime)}\n\n` +
+
+                        (availableDates.length
+                            ? `📆 Other Available Dates:\n${availableDates.join("\n")}\n\n`
+                            : ``) +
+
+                        (alternateVehicles.length
+                            ? `🚗 Other Available Vehicles:\n${alternateVehicles.join("\n")}\n\n`
+                            : ``) +
+
+                        `Please resend the FULL booking with your preferred option.`
                 });
+            }
+        }
+        // ==================================================
+        // EQUIPMENT CONFLICT PRE-CHECK
+        // ==================================================
+        if (bookingData.resource_type === "equipment") {
+
+            const { dates, timeStart, timeEnd } = bookingData;
+
+            for (const eq of bookingData.equipments) {
+
+                for (const date of dates) {
+
+                    const conflictCheck = await pool.query(
+                        `
+                SELECT 1
+                FROM "Equipment"
+                WHERE equipment_type_id = $1
+                  AND $2 = ANY(dates)
+                  AND (
+                      time_start < $4
+                      AND time_end > $3
+                  )
+                LIMIT 1
+                `,
+                        [eq.equipmentId, date, timeStart, timeEnd]
+                    );
+
+                    if (conflictCheck.rowCount > 0) {
+
+                        /* ========================================
+                           1️⃣ FIND ALTERNATE DATES
+                        ======================================== */
+
+                        const availableDates = [];
+                        const baseDate = new Date(date);
+
+                        for (let i = 1; i <= 14; i++) {
+
+                            const checkDate = new Date(baseDate);
+                            checkDate.setDate(baseDate.getDate() + i);
+
+                            const isoDate = checkDate.toISOString().split("T")[0];
+
+                            const checkConflict = await pool.query(
+                                `
+                        SELECT 1
+                        FROM "Equipment"
+                        WHERE equipment_type_id = $1
+                          AND $2 = ANY(dates)
+                        LIMIT 1
+                        `,
+                                [eq.equipmentId, isoDate]
+                            );
+
+                            if (checkConflict.rowCount === 0) {
+                                availableDates.push(
+                                    `• ${formatPrettyDate(isoDate)} (${formatTime12(timeStart)} – ${formatTime12(timeEnd)})`
+                                );
+                            }
+
+                            if (availableDates.length >= 5) break;
+                        }
+
+                        /* ========================================
+                           2️⃣ FIND ALTERNATE EQUIPMENTS
+                        ======================================== */
+
+                        const alternateEquipments = [];
+
+                        const allEquipments = await pool.query(
+                            `SELECT id, name FROM "Equipments" WHERE enabled = true`
+                        );
+
+                        for (const e of allEquipments.rows) {
+
+                            if (e.id === eq.equipmentId) continue;
+
+                            const altConflict = await pool.query(
+                                `
+                        SELECT 1
+                        FROM "Equipment"
+                        WHERE equipment_type_id = $1
+                          AND $2 = ANY(dates)
+                          AND (
+                              time_start < $4
+                              AND time_end > $3
+                          )
+                        LIMIT 1
+                        `,
+                                [e.id, date, timeStart, timeEnd]
+                            );
+
+                            if (altConflict.rowCount === 0) {
+                                alternateEquipments.push(`• ${e.name}`);
+                            }
+
+                            if (alternateEquipments.length >= 5) break;
+                        }
+
+                        const equipmentNameResult = await pool.query(
+                            `SELECT name FROM "Equipments" WHERE id = $1`,
+                            [eq.equipmentId]
+                        );
+
+                        const equipmentName =
+                            equipmentNameResult.rows[0]?.name || "Selected Equipment";
+
+                        return res.json({
+                            reply:
+                                `❌ Booking conflict detected.\n\n` +
+
+                                `🎥 Equipment: ${equipmentName}\n` +
+                                `📅 Date: ${formatPrettyDate(date)}\n` +
+                                `⏰ Requested Time: ${formatTime12(timeStart)} – ${formatTime12(timeEnd)}\n\n` +
+
+                                `🔴 Conflicts With:\n` +
+                                `• Time: ${formatTime12(timeStart)} – ${formatTime12(timeEnd)}\n\n` +
+
+                                (availableDates.length
+                                    ? `📆 Other Available Dates:\n${availableDates.join("\n")}\n\n`
+                                    : ``) +
+
+                                (alternateEquipments.length
+                                    ? `🎛 Other Available Equipments:\n${alternateEquipments.join("\n")}\n\n`
+                                    : ``) +
+
+                                `Please resend the FULL booking with your preferred option.`
+                        });
+                    }
+                }
             }
         }
 

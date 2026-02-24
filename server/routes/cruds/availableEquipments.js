@@ -14,37 +14,63 @@ router.post('/', async (req, res) => {
     }
 
     try {
-        const query = `
-            SELECT e.*
-            FROM "Equipments" e
-            WHERE e.enabled = true
-            AND e.id NOT IN (
-                SELECT equipment_type_id
-                FROM "Equipment"
-                WHERE
-                    ($1::time < time_end AND $2::time > time_start)
-                    AND EXISTS (
-                        SELECT 1
-                        FROM unnest($3::date[]) d
-                        WHERE d = ANY(dates)
-                    )
-            )
-            ORDER BY e.id DESC
-        `;
+        // 1️⃣ Get all enabled equipments
+        const equipmentsRes = await pool.query(`
+            SELECT *
+            FROM "Equipments"
+            WHERE enabled = true
+            ORDER BY id DESC
+        `);
 
-        console.log('AVAILABILITY CHECK (STRICT):', {
-            dates,
-            timeStart,
-            timeEnd
+        const equipments = equipmentsRes.rows;
+
+        // 2️⃣ Get all conflicting bookings
+        const bookingsRes = await pool.query(`
+            SELECT *
+            FROM "Equipment"
+            WHERE
+                ($1::time < time_end AND $2::time > time_start)
+                AND EXISTS (
+                    SELECT 1
+                    FROM unnest($3::date[]) d
+                    WHERE d = ANY(dates)
+                )
+        `, [timeStart, timeEnd, dates]);
+
+        const bookings = bookingsRes.rows;
+
+        // 3️⃣ Attach availability metadata
+        const enriched = equipments.map(eq => {
+
+            const conflicts = bookings.filter(
+                b => b.equipment_type_id === eq.id
+            );
+
+            if (!conflicts.length) {
+                return {
+                    ...eq,
+                    availability: "available",
+                    overlaps: []
+                };
+            }
+
+            return {
+                ...eq,
+                availability: "conflict",
+                overlaps: conflicts.map(c => ({
+                    date: c.dates,
+                    timeStart: c.time_start,
+                    timeEnd: c.time_end,
+                    purpose: c.purpose
+                }))
+            };
         });
 
-        const { rows } = await pool.query(query, [
-            timeStart,
-            timeEnd,
-            dates
-        ]);
+        res.json({
+            success: true,
+            equipments: enriched
+        });
 
-        res.json({ success: true, equipments: rows });
     } catch (err) {
         console.error('Available equipment error:', err);
         res.status(500).json({ success: false });

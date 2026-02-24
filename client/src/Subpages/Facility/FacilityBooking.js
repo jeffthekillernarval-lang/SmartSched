@@ -69,6 +69,56 @@ export default function Booking() {
     const [loadingAffiliations, setLoadingAffiliations] = useState(true);
     const [showFacilityBreakdown, setShowFacilityBreakdown] = useState(false);
     const [userFacilityIds, setUserFacilityIds] = useState([]);
+    const [availableSlots, setAvailableSlots] = useState([]);
+    const fetchAvailableDates = async (facilityId, requestedDate) => {
+        try {
+            const res = await fetch(
+                `http://localhost:5000/api/fetch-bookings`
+            );
+            const data = await res.json();
+
+            if (!data.success) return;
+
+            const facilityBookings = data.bookings.filter(
+                b => String(b.event_facility) === String(facilityId)
+            );
+
+            const results = [];
+
+            const startHour = 6;
+            const endHour = 19;
+
+            const today = new Date(requestedDate);
+
+            for (let i = 1; i <= 14; i++) {
+                const checkDate = new Date(today);
+                checkDate.setDate(today.getDate() + i);
+
+                const day = checkDate.getDay();
+
+                // Only Monday–Friday
+                if (day === 0 || day === 6) continue;
+
+                const dateStr = checkDate.toISOString().split("T")[0];
+
+                const bookingsOnThatDay = facilityBookings.filter(b =>
+                    (b.event_date || '').split("T")[0] === dateStr
+                );
+
+                if (bookingsOnThatDay.length === 0) {
+                    results.push({
+                        date: dateStr,
+                        start: "06:00",
+                        end: "19:00"
+                    });
+                }
+            }
+
+            setAvailableSlots(results.slice(0, 5)); // show max 5
+        } catch (err) {
+            console.error("Availability check failed:", err);
+        }
+    };
     const facilityMap = React.useMemo(() => {
         const map = {};
         facilitiesList.forEach(f => {
@@ -159,98 +209,6 @@ export default function Booking() {
     const formatDisplayTime = (start, end, formatTime) =>
         start && end ? `${formatTime(start)} – ${formatTime(end)}` : '';
 
-
-    // ===== DOWNLOAD RECEIPT =====
-    // const downloadReceipt = () => {
-    //     if (!booking) return;
-
-    //     const doc = new jsPDF("p", "mm", "a4");
-    //     const left = 15;
-    //     let y = 20;
-
-    //     // Title
-    //     doc.setFontSize(18);
-    //     doc.text("Facility & Vehicle Booking Receipt", 105, y, { align: "center" });
-    //     y += 12;
-
-    //     doc.setFontSize(12);
-
-    //     // Booking Details
-    //     doc.text(`Event: ${booking.event_name || booking.title || '—'}`, left, y);
-    //     y += 8;
-
-    //     doc.text(
-    //         `Facility: ${getFacilityName(booking, facilityMap)}`,
-    //         left,
-    //         y
-    //     );
-    //     y += 8;
-
-    //     doc.text(
-    //         `Organization: ${getOrganizationName(booking, affiliations)}`,
-    //         left,
-    //         y
-    //     );
-    //     y += 8;
-
-    //     doc.text(
-    //         `Requested By: ${booking.requested_by || booking.requestedBy || '—'}`,
-    //         left,
-    //         y
-    //     );
-    //     y += 8;
-
-    //     doc.text(`Contact: ${booking.contact || '—'}`, left, y);
-    //     y += 8;
-
-    //     doc.text(
-    //         `Date: ${formatDisplayDate(booking.event_date || booking.date)}`,
-    //         left,
-    //         y
-    //     );
-    //     y += 8;
-
-    //     doc.text(
-    //         `Time: ${formatDisplayTime(
-    //             booking.starting_time || booking.start,
-    //             booking.ending_time || booking.end,
-    //             formatTime
-    //         )}`,
-    //         left,
-    //         y
-    //     );
-    //     y += 12;
-
-    //     // Vehicle section (optional)
-    //     if (Array.isArray(vehicles) && vehicles.length > 0) {
-    //         doc.setFontSize(14);
-    //         doc.text("Vehicle Reservations:", left, y);
-    //         y += 8;
-
-    //         doc.setFontSize(12);
-    //         vehicles.forEach((v, idx) => {
-    //             doc.text(
-    //                 `${idx + 1}. ${v.vehicle_type || 'Unknown Vehicle'} – ${v.plate_number || 'N/A'}`,
-    //                 left + 5,
-    //                 y
-    //             );
-    //             y += 7;
-    //         });
-
-    //         y += 5;
-    //     }
-
-    //     // Signatures
-    //     y += 10;
-    //     doc.text("__________________________", left, y);
-    //     doc.text("Requested By", left, y + 6);
-
-    //     doc.text("__________________________", 130, y);
-    //     doc.text("Approved By (President)", 130, y + 6);
-
-    //     // Save
-    //     doc.save(`${booking.event_name || "booking"}-receipt.pdf`);
-    // };
     const downloadReceipt = () => {
         if (!booking) return;
 
@@ -785,13 +743,25 @@ export default function Booking() {
                 if (data.success && data.conflicts.length > 0) {
                     const conflict = data.conflicts[0];
 
-                    alert(
-                        `Conflict detected!\n\n` +
-                        `Event: ${conflict.event_name}\n` +
-                        `Date: ${conflict.event_date.split('T')[0]}\n` +
-                        `Time: ${conflict.starting_time} - ${conflict.ending_time}`
-                    );
+                    const facilityName =
+                        facilityMap[String(form.facility)] || "Unknown Facility";
 
+                    setConflictBooking({
+                        yourRequest: {
+                            title: form.title,
+                            facility: facilityName,
+                            date: s.date,
+                            start: s.startTime,
+                            end: s.endTime
+                        },
+                        conflict: {
+                            ...conflict,
+                            facilityName:
+                                facilityMap[String(conflict.event_facility)] ||
+                                conflict.event_facility
+                        }
+                    });
+                    await fetchAvailableDates(form.facility, s.date);
                     return; // ⛔ STOP SUBMIT
                 }
             }
@@ -2120,7 +2090,75 @@ export default function Booking() {
 
 
                     </div>
+                    {conflictBooking && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
+                                {/* LEFT SIDE — CONFLICT */}
+                                <div>
+                                    <div className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200">
+                                        <h3 className="font-semibold text-green-700 mb-2">
+                                            🟢 Your Booking Request
+                                        </h3>
+                                        <p><strong>Event:</strong> {conflictBooking.yourRequest.title}</p>
+                                        <p><strong>Facility:</strong> {conflictBooking.yourRequest.facility}</p>
+                                        <p><strong>Date:</strong> {conflictBooking.yourRequest.date}</p>
+                                        <p>
+                                            <strong>Time:</strong>{" "}
+                                            {formatTime(conflictBooking.yourRequest.start)} –{" "}
+                                            {formatTime(conflictBooking.yourRequest.end)}
+                                        </p>
+                                    </div>
+
+                                    <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                                        <h3 className="font-semibold text-red-700 mb-2">
+                                            🔴 Conflicts With
+                                        </h3>
+                                        <p><strong>Event:</strong> {conflictBooking.conflict.event_name}</p>
+                                        <p><strong>Date:</strong> {(conflictBooking.conflict.event_date || '').split('T')[0]}</p>
+                                        <p>
+                                            <strong>Time:</strong>{" "}
+                                            {formatTime(conflictBooking.conflict.starting_time)} –{" "}
+                                            {formatTime(conflictBooking.conflict.ending_time)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* RIGHT SIDE — AVAILABLE DATES */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <h3 className="font-semibold text-blue-700 mb-3">
+                                        📅 Other Available Dates (Mon–Fri, 6AM–7PM)
+                                    </h3>
+
+                                    {availableSlots.length === 0 ? (
+                                        <p className="text-gray-500 italic">
+                                            No available weekdays found in next 2 weeks.
+                                        </p>
+                                    ) : (
+                                        <ul className="space-y-2">
+                                            {availableSlots.map((slot, index) => (
+                                                <li
+                                                    key={index}
+                                                    className="bg-white border rounded-md px-3 py-2 shadow-sm hover:bg-blue-100 cursor-pointer"
+                                                    onClick={() => {
+                                                        setSchedules([{
+                                                            date: slot.date,
+                                                            startTime: slot.start,
+                                                            endTime: slot.end
+                                                        }]);
+                                                        setConflictBooking(null);
+                                                    }}
+                                                >
+                                                    <strong>{slot.date}</strong><br />
+                                                    {slot.start} – {slot.end}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 {/* Pagination Controls & Rows Per Page - Centered at bottom */}
                 {totalPages > 1 || filtered.length > 0 ? (

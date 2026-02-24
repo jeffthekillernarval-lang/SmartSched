@@ -229,9 +229,10 @@ export default function EquipmentBooking() {
 
     const getFilteredEquipmentsForDropdown = (index) => {
         const selectedIds = equipmentForm.equipments.filter((_, i) => i !== index);
-        return filteredEquipments.filter(eq => !selectedIds.includes(eq.id.toString()));
+        return filteredEquipments.filter(eq =>
+            !selectedIds.includes(eq.id.toString())
+        );
     };
-
     // ========================== SUBMIT HANDLER ==========================
     const handleSubmit = async (e) => {
 
@@ -640,7 +641,7 @@ export default function EquipmentBooking() {
                                                 }
 
                                             >
-                                                <option value="">
+                                                {/* <option value="">
                                                     {!equipmentForm.date || !equipmentForm.timeStart || !equipmentForm.timeEnd
                                                         ? "Select date & time first"
                                                         : "Select Equipment"}
@@ -649,7 +650,34 @@ export default function EquipmentBooking() {
                                                     <option key={e.id} value={e.id}>
                                                         {e.name} ({e.model_id})
                                                     </option>
-                                                ))}
+                                                ))} */}
+                                                {getFilteredEquipmentsForDropdown(index).map(e => {
+
+                                                    let label = `${e.name} (${e.model_id})`;
+                                                    let disabled = false;
+
+                                                    if (e.availability === "conflict") {
+                                                        disabled = true;
+
+                                                        // const overlapText = e.overlaps
+                                                        //     .map(o => `${o.timeStart?.slice(0, 5)}–${o.timeEnd?.slice(0, 5)}`)
+                                                        //     .join(", ");
+                                                        const overlapText = e.overlaps
+                                                            .map(o => `${o.timeStart?.slice(0, 5)}–${o.timeEnd?.slice(0, 5)} (${o.purpose})`)
+                                                            .join(", ");
+                                                        label += ` — Unavailable (${overlapText})`;
+                                                    }
+
+                                                    return (
+                                                        <option
+                                                            key={e.id}
+                                                            value={e.id}
+                                                            disabled={disabled}
+                                                        >
+                                                            {label}
+                                                        </option>
+                                                    );
+                                                })}
                                             </select>
                                             {equipmentForm.equipments.length > 1 && (
                                                 <button

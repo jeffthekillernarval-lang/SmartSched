@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react'; import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import Logo from '../../../src/assets/logos/cjc_logo.png'
@@ -18,6 +19,81 @@ export default function VehicleBooking() {
     const [specificDates, setSpecificDates] = useState([
         { date: "", startTime: "", endTime: "" }
     ]);
+    // CONFLICT ALERT
+    const [vehicleConflictModal, setVehicleConflictModal] = useState(null);
+    const [alternateVehicles, setAlternateVehicles] = useState([]);
+    const [alternateDates, setAlternateDates] = useState([]);
+    const fetchAlternateVehicles = async (attempted) => {
+        try {
+            const res = await fetch("http://localhost:5000/api/fetch-vehicle");
+            const data = await res.json();
+
+            const allBookings = data.vehicles.filter(v => !v.deleted);
+
+            const sameTimeConflicts = allBookings.filter(b =>
+                new Date(b.start_datetime).getTime() === new Date(attempted.start_datetime).getTime() &&
+                new Date(b.end_datetime).getTime() === new Date(attempted.end_datetime).getTime()
+            );
+
+            const conflictingVehicleIds = sameTimeConflicts.map(b => b.vehicle_id);
+
+            const freeVehicles = availableVehicles.filter(v =>
+                !conflictingVehicleIds.includes(v.id)
+            );
+
+            setAlternateVehicles(freeVehicles.slice(0, 5));
+        } catch (err) {
+            console.error("Alternate vehicle fetch failed", err);
+        }
+    };
+    const fetchAlternateDates = async (attempted) => {
+        try {
+            const res = await fetch("http://localhost:5000/api/fetch-vehicle");
+            const data = await res.json();
+
+            const bookingsForVehicle = data.vehicles.filter(b =>
+                b.vehicle_id === attempted.vehicle_id && !b.deleted
+            );
+
+            const results = [];
+            const baseDate = new Date(attempted.start_datetime);
+
+            for (let i = 1; i <= 14; i++) {
+                const checkDate = new Date(baseDate);
+                checkDate.setDate(baseDate.getDate() + i);
+
+                const day = checkDate.getDay();
+                if (day === 0 || day === 6) continue; // Mon–Fri only
+
+                const start = new Date(checkDate);
+                start.setHours(
+                    new Date(attempted.start_datetime).getHours(),
+                    new Date(attempted.start_datetime).getMinutes()
+                );
+
+                const end = new Date(checkDate);
+                end.setHours(
+                    new Date(attempted.end_datetime).getHours(),
+                    new Date(attempted.end_datetime).getMinutes()
+                );
+
+                const conflict = bookingsForVehicle.some(b =>
+                    new Date(b.start_datetime).toDateString() === start.toDateString()
+                );
+
+                if (!conflict) {
+                    results.push({
+                        start,
+                        end
+                    });
+                }
+            }
+
+            setAlternateDates(results.slice(0, 5));
+        } catch (err) {
+            console.error("Alternate date fetch failed", err);
+        }
+    };
     const inputClass =
         "w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#96161C] bg-white";
 
@@ -37,6 +113,20 @@ export default function VehicleBooking() {
 
         fetchAffiliations();
     }, []);
+    const getOverlap = (aStart, aEnd, bStart, bEnd) => {
+        const start = new Date(Math.max(
+            new Date(aStart),
+            new Date(bStart)
+        ));
+
+        const end = new Date(Math.min(
+            new Date(aEnd),
+            new Date(bEnd)
+        ));
+
+        if (start < end) return { start, end };
+        return null;
+    };
     const getAbbreviation = (id) => {
         console.log('Department ID:', id); // Log department_id
         console.log('Affiliations:', affiliations); // Log the full affiliations array
@@ -586,27 +676,49 @@ export default function VehicleBooking() {
                     );
 
                     const data = await res.json();
-
                     if (!data.success) {
 
                         const attempted = data.attempted;
-                        const attemptedStart = new Date(attempted.start_datetime).toLocaleString();
-                        const attemptedEnd = new Date(attempted.end_datetime).toLocaleString();
 
-                        let message = `You tried to book:\n${attemptedStart} → ${attemptedEnd}\n\n`;
-
-                        data.conflicts.forEach(c => {
-                            const start = new Date(c.start_datetime).toLocaleString();
-                            const end = new Date(c.end_datetime).toLocaleString();
-
-                            message += `Conflicts with:\n${start} → ${end}\n\n`;
+                        setVehicleConflictModal({
+                            attempted,
+                            conflicts: data.conflicts.map(c => ({
+                                ...c,
+                                overlap: getOverlap(
+                                    attempted.start_datetime,
+                                    attempted.end_datetime,
+                                    c.start_datetime,
+                                    c.end_datetime
+                                )
+                            }))
                         });
 
-                        alert(message);
+                        await fetchAlternateVehicles(attempted);
+                        await fetchAlternateDates(attempted);
 
-                        setIsSubmitting(false);   // ✅ FIX
+                        setIsSubmitting(false);
                         return;
                     }
+                    // if (!data.success) {
+
+                    //     const attempted = data.attempted;
+                    //     const attemptedStart = new Date(attempted.start_datetime).toLocaleString();
+                    //     const attemptedEnd = new Date(attempted.end_datetime).toLocaleString();
+
+                    //     let message = `You tried to book:\n${attemptedStart} → ${attemptedEnd}\n\n`;
+
+                    //     data.conflicts.forEach(c => {
+                    //         const start = new Date(c.start_datetime).toLocaleString();
+                    //         const end = new Date(c.end_datetime).toLocaleString();
+
+                    //         message += `Conflicts with:\n${start} → ${end}\n\n`;
+                    //     });
+
+                    //     alert(message);
+
+                    //     setIsSubmitting(false);   // ✅ FIX
+                    //     return;
+                    // }
 
 
 
@@ -1680,6 +1792,167 @@ export default function VehicleBooking() {
 
                 </table>
             </div >
+            {vehicleConflictModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <div className="w-[95vw] max-w-5xl bg-white rounded-2xl shadow-xl p-8 relative">
+
+                        <button
+                            onClick={() => setVehicleConflictModal(null)}
+                            className="absolute top-4 right-4 text-gray-500 hover:text-black"
+                        >
+                            ✕
+                        </button>
+
+                        <h2 className="text-2xl font-bold text-red-600 mb-6">
+                            ⚠️ Vehicle Booking Conflict
+                        </h2>
+
+                        <div className="grid md:grid-cols-3 gap-6">
+
+                            {/* LEFT — Attempted */}
+                            <div className="bg-green-50 border border-green-300 p-4 rounded-lg">
+                                <h3 className="font-semibold text-green-700 mb-3">
+                                    🟢 Your Booking
+                                </h3>
+
+                                <div className="space-y-1 text-sm">
+                                    <p><strong>Vehicle:</strong> {
+                                        availableVehicles.find(v => v.id === vehicleConflictModal.attempted.vehicle_id)?.vehicle_name
+                                    }</p>
+
+                                    <p><strong>Requestor:</strong> {form.requestor}</p>
+                                    <p><strong>Department:</strong> {
+                                        affiliations.find(a => a.id === Number(form.affiliationId))?.abbreviation
+                                    }</p>
+
+                                    <p><strong>Purpose:</strong> {form.purpose}</p>
+                                    <p><strong>Destination:</strong> {form.destination}</p>
+
+                                    <p><strong>Driver:</strong> {
+                                        availableDrivers.find(d => d.id === Number(form.driverId))?.name || "—"
+                                    }</p>
+
+                                    <div className="mt-2 p-2 bg-white rounded border">
+                                        <p><strong>Date:</strong> {
+                                            new Date(vehicleConflictModal.attempted.start_datetime)
+                                                .toLocaleDateString()
+                                        }</p>
+
+                                        <p>
+                                            <strong>Time:</strong>{" "}
+                                            {new Date(vehicleConflictModal.attempted.start_datetime)
+                                                .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                            {" – "}
+                                            {new Date(vehicleConflictModal.attempted.end_datetime)
+                                                .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* MIDDLE — Conflicts */}
+                            <div className="bg-red-50 border border-red-300 p-4 rounded-lg">
+                                <h3 className="font-semibold text-red-700 mb-3">
+                                    🔴 Conflicts With
+                                </h3>
+
+                                {vehicleConflictModal.conflicts.map((c, i) => (
+                                    <div key={i} className="mb-4 p-3 bg-white rounded border shadow-sm text-sm">
+
+                                        <p><strong>Vehicle:</strong> {
+                                            availableVehicles.find(v => v.id === c.vehicle_id)?.vehicle_name
+                                        }</p>
+
+                                        <p><strong>Requestor:</strong> {c.requestor}</p>
+
+                                        <p><strong>Department:</strong> {
+                                            affiliations.find(a => a.id === Number(c.department_id))?.abbreviation
+                                        }</p>
+
+                                        <p><strong>Purpose:</strong> {c.purpose}</p>
+                                        <p><strong>Destination:</strong> {c.destination}</p>
+
+                                        <div className="mt-2 p-2 bg-red-100 rounded border border-red-300">
+                                            <p><strong>Date:</strong> {
+                                                new Date(c.start_datetime).toLocaleDateString()
+                                            }</p>
+
+                                            <p>
+                                                <strong>Time:</strong>{" "}
+                                                {new Date(c.start_datetime)
+                                                    .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                {" – "}
+                                                {new Date(c.end_datetime)
+                                                    .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                            </p>
+
+                                            {c.overlap && (
+                                                <p className="mt-2 text-red-700 font-semibold">
+                                                    ⚠ Overlapping Time:
+                                                    {" "}
+                                                    {c.overlap.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                    {" – "}
+                                                    {c.overlap.end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* RIGHT — Smart Suggestions */}
+                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                                <h3 className="font-semibold text-blue-700 mb-2">
+                                    🚗 Try These Instead
+                                </h3>
+
+                                <div className="mb-4">
+                                    <p className="font-semibold text-sm mb-1">
+                                        Alternate Vehicles (Same Date)
+                                    </p>
+                                    {alternateVehicles.map(v => (
+                                        <div
+                                            key={v.id}
+                                            className="bg-white p-2 rounded border mb-1 cursor-pointer hover:bg-blue-100"
+                                            onClick={() => {
+                                                setForm(prev => ({ ...prev, vehicleId: v.id }));
+                                                setVehicleConflictModal(null);
+                                            }}
+                                        >
+                                            {v.vehicle_name}
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div>
+                                    <p className="font-semibold text-sm mb-1">
+                                        Alternate Dates (Same Vehicle)
+                                    </p>
+                                    {alternateDates.map((d, i) => (
+                                        <div
+                                            key={i}
+                                            className="bg-white p-2 rounded border mb-1 cursor-pointer hover:bg-blue-100"
+                                            onClick={() => {
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    startDate: d.start.toISOString().split("T")[0],
+                                                    endDate: d.start.toISOString().split("T")[0]
+                                                }));
+                                                setVehicleConflictModal(null);
+                                            }}
+                                        >
+                                            {d.start.toLocaleDateString()}
+                                        </div>
+                                    ))}
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
+            )}
         </div >
     );
 }
