@@ -69,25 +69,20 @@ export default function Booking() {
     const [loadingAffiliations, setLoadingAffiliations] = useState(true);
     const [showFacilityBreakdown, setShowFacilityBreakdown] = useState(false);
     const [userFacilityIds, setUserFacilityIds] = useState([]);
-    const [availableSlots, setAvailableSlots] = useState([]);
+    const [availableSlots, setAvailableSlots] = useState({});
     const fetchAvailableDates = async (facilityId, requestedDate) => {
         try {
-            const res = await fetch(
-                `http://localhost:5000/api/fetch-bookings`
-            );
+            const res = await fetch(`http://localhost:5000/api/fetch-bookings`);
             const data = await res.json();
-
-            if (!data.success) return;
+            if (!data.success) return [];
 
             const facilityBookings = data.bookings.filter(
                 b => String(b.event_facility) === String(facilityId)
             );
 
             const results = [];
-
             const startHour = 6;
             const endHour = 19;
-
             const today = new Date(requestedDate);
 
             for (let i = 1; i <= 14; i++) {
@@ -95,14 +90,12 @@ export default function Booking() {
                 checkDate.setDate(today.getDate() + i);
 
                 const day = checkDate.getDay();
-
-                // Only Monday–Friday
                 if (day === 0 || day === 6) continue;
 
                 const dateStr = checkDate.toISOString().split("T")[0];
 
-                const bookingsOnThatDay = facilityBookings.filter(b =>
-                    (b.event_date || '').split("T")[0] === dateStr
+                const bookingsOnThatDay = facilityBookings.filter(
+                    b => (b.event_date || '').split("T")[0] === dateStr
                 );
 
                 if (bookingsOnThatDay.length === 0) {
@@ -114,9 +107,9 @@ export default function Booking() {
                 }
             }
 
-            setAvailableSlots(results.slice(0, 5)); // show max 5
-        } catch (err) {
-            console.error("Availability check failed:", err);
+            return results.slice(0, 5);
+        } catch {
+            return [];
         }
     };
     const facilityMap = React.useMemo(() => {
@@ -219,7 +212,11 @@ export default function Booking() {
 
     const formatDisplayTime = (start, end, formatTime) =>
         start && end ? `${formatTime(start)} – ${formatTime(end)}` : '';
-
+    const applySuggestedDate = (index, newDate) => {
+        const updated = [...schedules];
+        updated[index].date = newDate;
+        setSchedules(updated);
+    };
     const downloadReceipt = () => {
         if (!booking) return;
 
@@ -745,35 +742,49 @@ export default function Booking() {
                     params.append('exclude_id', editingId);
                 }
 
-                const res = await fetch(
-                    `http://localhost:5000/api/fetch-booking-conflicts?${params.toString()}`
-                );
+                let allConflicts = [];
 
-                const data = await res.json();
-
-                if (data.success && data.conflicts.length > 0) {
-                    const conflict = data.conflicts[0];
-
-                    const facilityName =
-                        facilityMap[String(form.facility)] || "Unknown Facility";
-
-                    setConflictBooking({
-                        yourRequest: {
-                            title: form.title,
-                            facility: facilityName,
-                            date: s.date,
-                            start: s.startTime,
-                            end: s.endTime
-                        },
-                        conflict: {
-                            ...conflict,
-                            facilityName:
-                                facilityMap[String(conflict.event_facility)] ||
-                                conflict.event_facility
-                        }
+                for (const s of schedules) {
+                    const params = new URLSearchParams({
+                        facility_id: form.facility,
+                        event_date: s.date,
+                        start_time: s.startTime,
+                        end_time: s.endTime,
                     });
-                    await fetchAvailableDates(form.facility, s.date);
-                    return; // ⛔ STOP SUBMIT
+
+                    if (editingId) {
+                        params.append('exclude_id', editingId);
+                    }
+
+                    const res = await fetch(
+                        `http://localhost:5000/api/fetch-booking-conflicts?${params.toString()}`
+                    );
+
+                    const data = await res.json();
+
+                    if (data.success && data.conflicts.length > 0) {
+                        allConflicts.push({
+                            requested: s,
+                            conflicts: data.conflicts
+                        });
+                    }
+                }
+                if (allConflicts.length > 0) {
+
+                    const slotMap = {};
+
+                    for (const conflict of allConflicts) {
+                        const slots = await fetchAvailableDates(
+                            form.facility,
+                            conflict.requested.date
+                        );
+
+                        slotMap[conflict.requested.date] = slots;
+                    }
+
+                    setAvailableSlots(slotMap);
+                    setConflictBooking(allConflicts);
+                    return;
                 }
             }
         } catch (err) {
@@ -1502,22 +1513,31 @@ export default function Booking() {
 
                 )}
             </div>
-            {conflictBooking && (
+            {Array.isArray(conflictBooking) && conflictBooking.length > 0 && (
                 <div className="mt-6 p-4 border-2 border-red-500 rounded-lg bg-red-50">
-                    <h2 className="text-lg font-bold text-red-700 mb-2">
-                        ⚠️ Conflict Detected
+                    <h2 className="text-lg font-bold text-red-700 mb-4">
+                        ⚠️ Conflicts Detected
                     </h2>
-                    <div className="p-3 border rounded bg-white shadow">
-                        <p><strong>Event:</strong> {conflictBooking.event_name}</p>
-                        <p><strong>Date:</strong> {(conflictBooking.event_date || '').split('T')[0]}</p>
-                        <p><strong>Time:</strong> {conflictBooking.starting_time} - {conflictBooking.ending_time}</p>
-                        <p><strong>Venue:</strong> {conflictBooking.event_facility}</p>
-                        <p><strong>Organization:</strong> {conflictBooking.organization}</p>
-                        <p><strong>Requested By:</strong> {conflictBooking.requested_by}</p>
-                        <p><strong>Contact:</strong> {conflictBooking.contact}</p>
-                        <p><strong>Status:</strong> {conflictBooking.status}</p>
 
-                    </div>
+                    {conflictBooking.map((item, index) => (
+                        <div key={index} className="mb-4 p-3 bg-white border rounded shadow">
+                            <p className="font-semibold text-red-600">
+                                Your Requested Date:
+                            </p>
+                            <p>Date: {item.requested.date}</p>
+                            <p>Time: {item.requested.startTime} - {item.requested.endTime}</p>
+
+                            <div className="mt-2">
+                                {item.conflicts.map((c, i) => (
+                                    <div key={i} className="mt-2 border-t pt-2">
+                                        <p><strong>Conflicts With:</strong> {c.event_name}</p>
+                                        <p>Date: {(c.event_date || '').split('T')[0]}</p>
+                                        <p>Time: {c.starting_time} - {c.ending_time}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -2106,69 +2126,140 @@ export default function Booking() {
                     {conflictBooking && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
+                                <button
+                                    onClick={() => setConflictBooking(null)}
+                                    className="absolute top-2 right-2 text-red-600 font-bold"
+                                >
+                                    ✕ Close
+                                </button>
                                 {/* LEFT SIDE — CONFLICT */}
-                                <div>
-                                    <div className="mb-6 p-4 rounded-lg bg-green-50 border border-green-200">
-                                        <h3 className="font-semibold text-green-700 mb-2">
-                                            🟢 Your Booking Request
-                                        </h3>
-                                        <p><strong>Event:</strong> {conflictBooking.yourRequest.title}</p>
-                                        <p><strong>Facility:</strong> {conflictBooking.yourRequest.facility}</p>
-                                        <p><strong>Date:</strong> {conflictBooking.yourRequest.date}</p>
-                                        <p>
-                                            <strong>Time:</strong>{" "}
-                                            {formatTime(conflictBooking.yourRequest.start)} –{" "}
-                                            {formatTime(conflictBooking.yourRequest.end)}
-                                        </p>
-                                    </div>
+                                {conflictBooking.map((item, index) => (
+                                    <div key={index} className="mb-6">
 
-                                    <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                                        <h3 className="font-semibold text-red-700 mb-2">
-                                            🔴 Conflicts With
-                                        </h3>
-                                        <p><strong>Event:</strong> {conflictBooking.conflict.event_name}</p>
-                                        <p><strong>Date:</strong> {(conflictBooking.conflict.event_date || '').split('T')[0]}</p>
-                                        <p>
-                                            <strong>Time:</strong>{" "}
-                                            {formatTime(conflictBooking.conflict.starting_time)} –{" "}
-                                            {formatTime(conflictBooking.conflict.ending_time)}
-                                        </p>
+                                        {/* YOUR REQUEST */}
+                                        <div className="mb-4 p-4 rounded-lg bg-green-50 border border-green-200">
+                                            <h3 className="font-semibold text-green-700 mb-2">
+                                                🟢 Your Booking Request
+                                            </h3>
+                                            <p><strong>Date:</strong> {item.requested.date}</p>
+                                            <p>
+                                                <strong>Time:</strong>{" "}
+                                                {formatTime(item.requested.startTime)} –{" "}
+                                                {formatTime(item.requested.endTime)}
+                                            </p>
+                                        </div>
+
+                                        {/* CONFLICTS */}
+                                        <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                                            <h3 className="font-semibold text-red-700 mb-2">
+                                                🔴 Conflicts With
+                                            </h3>
+
+                                            {item.conflicts.map((c, i) => (
+                                                <div key={i} className="mt-2 border-t pt-2">
+                                                    <p><strong>Event:</strong> {c.event_name}</p>
+                                                    <p><strong>Date:</strong> {(c.event_date || '').split('T')[0]}</p>
+                                                    <p>
+                                                        <strong>Time:</strong>{" "}
+                                                        {formatTime(c.starting_time)} –{" "}
+                                                        {formatTime(c.ending_time)}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+
                                     </div>
-                                </div>
+                                ))}
 
                                 {/* RIGHT SIDE — AVAILABLE DATES */}
-                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                    <h3 className="font-semibold text-blue-700 mb-3">
-                                        📅 Other Available Dates (Mon–Fri, 6AM–7PM)
-                                    </h3>
+                                {conflictBooking.map((item, index) => {
 
-                                    {availableSlots.length === 0 ? (
-                                        <p className="text-gray-500 italic">
-                                            No available weekdays found in next 2 weeks.
-                                        </p>
-                                    ) : (
-                                        <ul className="space-y-2">
-                                            {availableSlots.map((slot, index) => (
-                                                <li
-                                                    key={index}
-                                                    className="bg-white border rounded-md px-3 py-2 shadow-sm hover:bg-blue-100 cursor-pointer"
-                                                    onClick={() => {
-                                                        setSchedules([{
-                                                            date: slot.date,
-                                                            startTime: slot.start,
-                                                            endTime: slot.end
-                                                        }]);
-                                                        setConflictBooking(null);
-                                                    }}
-                                                >
-                                                    <strong>{slot.date}</strong><br />
-                                                    {slot.start} – {slot.end}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </div>
+                                    const slots = availableSlots[item.requested.date] || [];
+
+                                    return (
+                                        <div key={index} className="mt-6">
+
+                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                                <h3 className="font-semibold text-blue-700 mb-3">
+                                                    📅 Suggested Dates for {formatDisplayDate(item.requested.date)}
+                                                </h3>
+
+                                                {slots.length === 0 ? (
+                                                    <p className="text-gray-500 italic">
+                                                        No available weekdays found.
+                                                    </p>
+                                                ) : (
+                                                    <ul className="space-y-2">
+                                                        {slots.map((slot, slotIndex) => {
+
+                                                            // get all selected dates except current conflict
+                                                            const selectedDates = conflictBooking
+                                                                .filter((_, i) => i !== index)
+                                                                .map(c => c.selectedDate)
+                                                                .filter(Boolean);
+
+                                                            const isAlreadyChosen = selectedDates.includes(slot.date);
+
+                                                            return (
+                                                                <li
+                                                                    key={slotIndex}
+                                                                    className={`px-3 py-2 rounded-md border shadow-sm
+                ${isAlreadyChosen
+                                                                            ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                                                                            : item.selectedDate === slot.date
+                                                                                ? "bg-blue-200"
+                                                                                : "bg-white hover:bg-blue-100 cursor-pointer"
+                                                                        }
+            `}
+                                                                    onClick={() => {
+                                                                        if (isAlreadyChosen) return;
+
+                                                                        const updated = [...conflictBooking];
+                                                                        updated[index].selectedDate = slot.date;
+                                                                        setConflictBooking(updated);
+                                                                    }}
+                                                                >
+                                                                    <strong>
+                                                                        {formatDisplayDate(slot.date)}
+                                                                    </strong>
+                                                                    <br />
+                                                                    {formatTime(slot.start)} – {formatTime(slot.end)}
+                                                                </li>
+                                                            );
+                                                        })}
+                                                    </ul>
+                                                )}
+                                            </div>
+
+                                        </div>
+                                    );
+                                })}
+                                <button
+                                    className="mt-6 px-6 py-2 bg-green-600 text-white rounded-lg"
+                                    onClick={() => {
+
+                                        const updatedSchedules = [...schedules];
+
+                                        conflictBooking.forEach(conflict => {
+
+                                            if (!conflict.selectedDate) return;
+
+                                            const scheduleIndex = updatedSchedules.findIndex(
+                                                s => s.date === conflict.requested.date
+                                            );
+
+                                            if (scheduleIndex !== -1) {
+                                                updatedSchedules[scheduleIndex].date =
+                                                    conflict.selectedDate;
+                                            }
+                                        });
+
+                                        setSchedules(updatedSchedules);
+                                        setConflictBooking(null);
+                                    }}
+                                >
+                                    Confirm New Dates
+                                </button>
                             </div>
                         </div>
                     )}
