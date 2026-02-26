@@ -184,10 +184,18 @@ export default function Booking() {
         console.groupEnd();
     }, [bookings, userFacilityIds, facilityMap]);
 
-
+    const getTomorrowDate = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        return d.toISOString().split('T')[0];
+    };
 
     const [schedules, setSchedules] = useState([
-        { date: '' || null, startTime: '' || null, endTime: '' || null }
+        {
+            date: getTomorrowDate(),
+            startTime: '',
+            endTime: ''
+        }
     ]);
     // ===== Helpers (keep as-is) =====
     const getFacilityName = (booking, facilityMap) =>
@@ -197,14 +205,17 @@ export default function Booking() {
         affiliations.find(a => a.id === Number(booking.organization))
             ?.abbreviation || 'Unknown Organization';
 
-    const formatDisplayDate = (date) =>
-        date
-            ? new Date(date).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-            })
-            : '';
+    const formatDisplayDate = (dateStr) => {
+        if (!dateStr) return '';
+
+        const [year, month, day] = dateStr.split('T')[0].split('-').map(Number);
+
+        return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+        });
+    };
 
     const formatDisplayTime = (start, end, formatTime) =>
         start && end ? `${formatTime(start)} – ${formatTime(end)}` : '';
@@ -1025,11 +1036,7 @@ export default function Booking() {
     };
 
 
-    const getTomorrowDate = () => {
-        const d = new Date();
-        d.setDate(d.getDate() + 1);
-        return d.toISOString().split('T')[0];
-    };
+
     function calculateMinEndTime(startTime) {
         if (!startTime) return "06:00";
 
@@ -1712,9 +1719,11 @@ export default function Booking() {
                                                 {(() => {
                                                     const d = (b.event_date || b.date || '').split('T')[0];
                                                     if (!d) return '';
-                                                    const [year, month, day] = d.split('-');
-                                                    const dateObj = new Date(`${year}-${month}-${day}`);
-                                                    dateObj.setDate(dateObj.getDate() + 1);
+
+                                                    const [year, month, day] = d.split('-').map(Number);
+                                                    console.log("RAW EVENT DATE:", b.event_date, typeof b.event_date);
+                                                    const dateObj = new Date(year, month - 1, day);
+
                                                     return dateObj.toLocaleDateString('en-US', {
                                                         year: 'numeric',
                                                         month: 'long',
@@ -1980,14 +1989,18 @@ export default function Booking() {
                                                     icon={<Calendar />}
                                                     label="Date"
                                                     value={
-                                                        booking.event_date || booking.date
-                                                            ? new Date(booking.event_date || booking.date)
-                                                                .toLocaleDateString("en-US", {
-                                                                    year: "numeric",
-                                                                    month: "long",
-                                                                    day: "numeric"
-                                                                })
-                                                            : "—"
+                                                        (() => {
+                                                            const raw = booking.event_date || booking.date;
+                                                            if (!raw) return "—";
+
+                                                            const [year, month, day] = raw.split("T")[0].split("-").map(Number);
+
+                                                            return new Date(year, month - 1, day).toLocaleDateString("en-US", {
+                                                                year: "numeric",
+                                                                month: "long",
+                                                                day: "numeric"
+                                                            });
+                                                        })()
                                                     }
                                                 />
 
