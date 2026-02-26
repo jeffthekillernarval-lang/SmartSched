@@ -19,10 +19,11 @@ export default function VehicleBooking() {
     const [specificDates, setSpecificDates] = useState([
         { date: "", startTime: "", endTime: "" }
     ]);
+    const [selectedAltDates, setSelectedAltDates] = useState({});
     // CONFLICT ALERT
-    const [vehicleConflictModal, setVehicleConflictModal] = useState(null);
-    const [alternateVehicles, setAlternateVehicles] = useState([]);
-    const [alternateDates, setAlternateDates] = useState([]);
+    const [vehicleConflictModal, setVehicleConflictModal] = useState([]);
+    // const [alternateVehicles, setAlternateVehicles] = useState([]);
+    // const [alternateDates, setAlternateDates] = useState([]);
     const fetchAlternateVehicles = async (attempted) => {
         try {
             const res = await fetch("http://localhost:5000/api/fetch-vehicle");
@@ -38,10 +39,11 @@ export default function VehicleBooking() {
             const conflictingVehicleIds = sameTimeConflicts.map(b => b.vehicle_id);
 
             const freeVehicles = availableVehicles.filter(v =>
+                v.id !== Number(attempted.id) &&   // 🚫 exclude current vehicle
                 !conflictingVehicleIds.includes(v.id)
             );
 
-            setAlternateVehicles(freeVehicles.slice(0, 5));
+            return freeVehicles.slice(0, 5);
         } catch (err) {
             console.error("Alternate vehicle fetch failed", err);
         }
@@ -89,7 +91,7 @@ export default function VehicleBooking() {
                 }
             }
 
-            setAlternateDates(results.slice(0, 5));
+            return results.slice(0, 5);
         } catch (err) {
             console.error("Alternate date fetch failed", err);
         }
@@ -648,8 +650,13 @@ export default function VehicleBooking() {
             }
 
             /* --------------------------------------------------
-               CREATE MODE
-            -------------------------------------------------- */
+   CREATE MODE
+-------------------------------------------------- */
+
+            let hasConflict = false;
+            let conflictBlocks = [];
+
+            setVehicleConflictModal([]);
 
             for (const bookingTime of bookingsToCreate) {
 
@@ -676,11 +683,18 @@ export default function VehicleBooking() {
                     );
 
                     const data = await res.json();
+
+                    // ❌ CONFLICT
                     if (!data.success) {
+
+                        hasConflict = true;
 
                         const attempted = data.attempted;
 
-                        setVehicleConflictModal({
+                        const altVehicles = await fetchAlternateVehicles(attempted);
+                        const altDates = await fetchAlternateDates(attempted);
+
+                        conflictBlocks.push({
                             attempted,
                             conflicts: data.conflicts.map(c => ({
                                 ...c,
@@ -690,52 +704,37 @@ export default function VehicleBooking() {
                                     c.start_datetime,
                                     c.end_datetime
                                 )
-                            }))
+                            })),
+                            alternateVehicles: altVehicles || [],
+                            alternateDates: altDates || []
                         });
 
-                        await fetchAlternateVehicles(attempted);
-                        await fetchAlternateDates(attempted);
-
-                        setIsSubmitting(false);
-                        return;
+                        continue; // keep checking other dates
                     }
-                    // if (!data.success) {
 
-                    //     const attempted = data.attempted;
-                    //     const attemptedStart = new Date(attempted.start_datetime).toLocaleString();
-                    //     const attemptedEnd = new Date(attempted.end_datetime).toLocaleString();
-
-                    //     let message = `You tried to book:\n${attemptedStart} → ${attemptedEnd}\n\n`;
-
-                    //     data.conflicts.forEach(c => {
-                    //         const start = new Date(c.start_datetime).toLocaleString();
-                    //         const end = new Date(c.end_datetime).toLocaleString();
-
-                    //         message += `Conflicts with:\n${start} → ${end}\n\n`;
-                    //     });
-
-                    //     alert(message);
-
-                    //     setIsSubmitting(false);   // ✅ FIX
-                    //     return;
-                    // }
-
-
-
-
+                    // ✅ SUCCESS
                     setBookings(prev => [...prev, data.booking]);
 
                 } catch (error) {
                     console.error("Error creating booking:", error);
                     alert("Server error.");
+                    setIsSubmitting(false);
                     return;
                 }
             }
 
             /* --------------------------------------------------
-               RESET FORM AFTER SUCCESS
+               AFTER LOOP FINISHES
             -------------------------------------------------- */
 
+            // If ANY conflicts happened → show modal & STOP
+            if (hasConflict) {
+                setVehicleConflictModal(conflictBlocks);
+                setIsSubmitting(false);
+                return; // 🚫 DO NOT RESET FORM
+            }
+
+            // Only reset if ALL bookings succeeded
             setForm({
                 vehicleId: "",
                 driverId: "",
@@ -752,6 +751,7 @@ export default function VehicleBooking() {
             setSpecificDates([
                 { date: "", startTime: "", endTime: "" }
             ]);
+
             setShowForm(false);
             setConflicts([]);
             setIsSubmitting(false);
@@ -1792,13 +1792,16 @@ export default function VehicleBooking() {
 
                 </table>
             </div >
-            {vehicleConflictModal && (
+            {vehicleConflictModal.length > 0 && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                    <div className="w-[95vw] max-w-5xl bg-white rounded-2xl shadow-xl p-8 relative">
+                    <div className="w-[95vw] max-w-6xl bg-white rounded-2xl shadow-xl p-8 relative overflow-y-auto max-h-[90vh]">
 
                         <button
-                            onClick={() => setVehicleConflictModal(null)}
-                            className="absolute top-4 right-4 text-gray-500 hover:text-black"
+                            onClick={() => {
+                                setVehicleConflictModal([]);
+                                setSelectedAltDates({});
+                            }}
+                            className="absolute top-4 right-4 text-gray-500 hover:text-black text-xl"
                         >
                             ✕
                         </button>
@@ -1807,149 +1810,205 @@ export default function VehicleBooking() {
                             ⚠️ Vehicle Booking Conflict
                         </h2>
 
-                        <div className="grid md:grid-cols-3 gap-6">
+                        {/* 🔁 PROPER MAPPING HERE */}
+                        {vehicleConflictModal.map((block, index) => (
+                            <div key={index} className="mb-8 border-b pb-6">
 
-                            {/* LEFT — Attempted */}
-                            <div className="bg-green-50 border border-green-300 p-4 rounded-lg">
-                                <h3 className="font-semibold text-green-700 mb-3">
-                                    🟢 Your Booking
-                                </h3>
+                                <div className="grid md:grid-cols-3 gap-6">
 
-                                <div className="space-y-1 text-sm">
-                                    <p><strong>Vehicle:</strong> {
-                                        availableVehicles.find(v => v.id === vehicleConflictModal.attempted.vehicle_id)?.vehicle_name
-                                    }</p>
-
-                                    <p><strong>Requestor:</strong> {form.requestor}</p>
-                                    <p><strong>Department:</strong> {
-                                        affiliations.find(a => a.id === Number(form.affiliationId))?.abbreviation
-                                    }</p>
-
-                                    <p><strong>Purpose:</strong> {form.purpose}</p>
-                                    <p><strong>Destination:</strong> {form.destination}</p>
-
-                                    <p><strong>Driver:</strong> {
-                                        availableDrivers.find(d => d.id === Number(form.driverId))?.name || "—"
-                                    }</p>
-
-                                    <div className="mt-2 p-2 bg-white rounded border">
-                                        <p><strong>Date:</strong> {
-                                            new Date(vehicleConflictModal.attempted.start_datetime)
-                                                .toLocaleDateString()
-                                        }</p>
+                                    {/* LEFT — Requested */}
+                                    <div className="bg-green-50 border border-green-300 p-4 rounded-lg">
+                                        <h3 className="font-semibold text-green-700 mb-2">
+                                            🟢 Requested Date #{index + 1}
+                                        </h3>
+                                        <p className="font-semibold">
+                                            Vehicle: {
+                                                availableVehicles.find(v => v.id === Number(block.attempted.id))
+                                                    ?.vehicle_name || "Unknown Vehicle"
+                                            }
+                                        </p>
+                                        <p>
+                                            <strong>
+                                                {new Date(block.attempted.start_datetime)
+                                                    .toLocaleDateString("en-US", {
+                                                        month: "long",
+                                                        day: "numeric",
+                                                        year: "numeric"
+                                                    })}
+                                            </strong>
+                                        </p>
 
                                         <p>
-                                            <strong>Time:</strong>{" "}
-                                            {new Date(vehicleConflictModal.attempted.start_datetime)
+                                            {new Date(block.attempted.start_datetime)
                                                 .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                             {" – "}
-                                            {new Date(vehicleConflictModal.attempted.end_datetime)
+                                            {new Date(block.attempted.end_datetime)
                                                 .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                         </p>
                                     </div>
-                                </div>
-                            </div>
 
-                            {/* MIDDLE — Conflicts */}
-                            <div className="bg-red-50 border border-red-300 p-4 rounded-lg">
-                                <h3 className="font-semibold text-red-700 mb-3">
-                                    🔴 Conflicts With
-                                </h3>
+                                    {/* MIDDLE — Conflicts */}
+                                    <div className="bg-red-50 border border-red-300 p-4 rounded-lg">
+                                        <h3 className="font-semibold text-red-700 mb-2">
+                                            🔴 Conflicts With
+                                        </h3>
 
-                                {vehicleConflictModal.conflicts.map((c, i) => (
-                                    <div key={i} className="mb-4 p-3 bg-white rounded border shadow-sm text-sm">
-
-                                        <p><strong>Vehicle:</strong> {
-                                            availableVehicles.find(v => v.id === c.vehicle_id)?.vehicle_name
-                                        }</p>
-
-                                        <p><strong>Requestor:</strong> {c.requestor}</p>
-
-                                        <p><strong>Department:</strong> {
-                                            affiliations.find(a => a.id === Number(c.department_id))?.abbreviation
-                                        }</p>
-
-                                        <p><strong>Purpose:</strong> {c.purpose}</p>
-                                        <p><strong>Destination:</strong> {c.destination}</p>
-
-                                        <div className="mt-2 p-2 bg-red-100 rounded border border-red-300">
-                                            <p><strong>Date:</strong> {
-                                                new Date(c.start_datetime).toLocaleDateString()
-                                            }</p>
-
-                                            <p>
-                                                <strong>Time:</strong>{" "}
-                                                {new Date(c.start_datetime)
-                                                    .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                                {" – "}
-                                                {new Date(c.end_datetime)
-                                                    .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                            </p>
-
-                                            {c.overlap && (
-                                                <p className="mt-2 text-red-700 font-semibold">
-                                                    ⚠ Overlapping Time:
-                                                    {" "}
-                                                    {c.overlap.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                                    {" – "}
-                                                    {c.overlap.end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                        {block.conflicts.map((c, i) => (
+                                            <div key={i} className="mb-2 text-sm bg-white p-2 rounded border">
+                                                <p>
+                                                    <p className="font-semibold text-gray-700">
+                                                        Vehicle: {
+                                                            availableVehicles.find(v => v.id === Number(c.vehicle_id))
+                                                                ?.vehicle_name || "Unknown Vehicle"
+                                                        }
+                                                    </p>
+                                                    <strong>
+                                                        {new Date(c.start_datetime)
+                                                            .toLocaleDateString("en-US", {
+                                                                month: "long",
+                                                                day: "numeric",
+                                                                year: "numeric"
+                                                            })}
+                                                    </strong>
                                                 </p>
+
+                                                <p>
+                                                    {new Date(c.start_datetime)
+                                                        .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                    {" – "}
+                                                    {new Date(c.end_datetime)
+                                                        .toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                </p>
+
+                                                {c.overlap && (
+                                                    <p className="text-red-600 font-semibold mt-1">
+                                                        ⚠ Overlap:
+                                                        {" "}
+                                                        {c.overlap.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                        {" – "}
+                                                        {c.overlap.end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div>
+                                        <h3 className="font-semibold text-blue-700 mb-2">
+                                            🚐 Alternate Vehicles (Same Time)
+                                        </h3>
+
+                                        {block.alternateVehicles?.map((v, i) => (
+                                            <div
+                                                key={i}
+                                                className="p-2 mb-2 bg-white border rounded hover:bg-blue-100 cursor-pointer"
+                                                onClick={() => {
+                                                    setForm(prev => ({
+                                                        ...prev,
+                                                        vehicleId: v.id
+                                                    }));
+                                                    setVehicleConflictModal([]);
+                                                }}
+                                            >
+                                                <strong>{v.vehicle_name}</strong>
+                                            </div>
+                                        ))}
+                                        {/* RIGHT — Alternate Dates */}
+                                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-blue-700 mb-2">
+                                                📅 Alternate Dates
+                                            </h3>
+
+                                            {block.alternateDates?.map((d, i) => {
+
+                                                const formattedDate = d.start.toLocaleDateString("en-US", {
+                                                    month: "long",
+                                                    day: "numeric",
+                                                    year: "numeric"
+                                                });
+
+                                                const formattedTime =
+                                                    d.start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) +
+                                                    " – " +
+                                                    d.end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+                                                const isSelected = selectedAltDates[index] === i;
+
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        className={`p-2 mb-2 rounded border cursor-pointer 
+                      ${isSelected
+                                                                ? "bg-blue-200 border-blue-400"
+                                                                : "bg-white hover:bg-blue-100"
+                                                            }`}
+                                                        onClick={() =>
+                                                            setSelectedAltDates(prev => ({
+                                                                ...prev,
+                                                                [index]: i
+                                                            }))
+                                                        }
+                                                    >
+                                                        <strong>{formattedDate}</strong>
+                                                        <br />
+                                                        <span className="text-sm">{formattedTime}</span>
+                                                    </div>
+                                                );
+                                            })}
+
+                                            {selectedAltDates[index] !== undefined && (
+                                                <button
+                                                    type="button"
+                                                    className="mt-2 w-full bg-blue-600 text-white py-2 rounded"
+                                                    onClick={() => {
+                                                        const selected = block.alternateDates[selectedAltDates[index]];
+                                                        if (!selected) return;
+
+                                                        const year = selected.start.getFullYear();
+                                                        const month = String(selected.start.getMonth() + 1).padStart(2, "0");
+                                                        const day = String(selected.start.getDate()).padStart(2, "0");
+
+                                                        const newDate = `${year}-${month}-${day}`;
+
+                                                        if (bookingMode === "specific") {
+                                                            const updated = [...specificDates];
+                                                            if (updated[index]) {
+                                                                updated[index] = {
+                                                                    ...updated[index],
+                                                                    date: newDate
+                                                                };
+                                                                setSpecificDates(updated);
+                                                            }
+                                                        }
+
+                                                        if (bookingMode === "single") {
+                                                            setForm(prev => ({
+                                                                ...prev,
+                                                                startDate: newDate,
+                                                                endDate: newDate
+                                                            }));
+                                                        }
+
+                                                        if (bookingMode === "range") {
+                                                            setForm(prev => ({
+                                                                ...prev,
+                                                                startDate: newDate,
+                                                                endDate: newDate
+                                                            }));
+                                                        }
+
+                                                        setVehicleConflictModal([]);
+                                                        setSelectedAltDates({});
+                                                    }}
+                                                >
+                                                    Confirm This Date
+                                                </button>
                                             )}
                                         </div>
                                     </div>
-                                ))}
-                            </div>
 
-                            {/* RIGHT — Smart Suggestions */}
-                            <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                                <h3 className="font-semibold text-blue-700 mb-2">
-                                    🚗 Try These Instead
-                                </h3>
-
-                                <div className="mb-4">
-                                    <p className="font-semibold text-sm mb-1">
-                                        Alternate Vehicles (Same Date)
-                                    </p>
-                                    {alternateVehicles.map(v => (
-                                        <div
-                                            key={v.id}
-                                            className="bg-white p-2 rounded border mb-1 cursor-pointer hover:bg-blue-100"
-                                            onClick={() => {
-                                                setForm(prev => ({ ...prev, vehicleId: v.id }));
-                                                setVehicleConflictModal(null);
-                                            }}
-                                        >
-                                            {v.vehicle_name}
-                                        </div>
-                                    ))}
                                 </div>
-
-                                <div>
-                                    <p className="font-semibold text-sm mb-1">
-                                        Alternate Dates (Same Vehicle)
-                                    </p>
-                                    {alternateDates.map((d, i) => (
-                                        <div
-                                            key={i}
-                                            className="bg-white p-2 rounded border mb-1 cursor-pointer hover:bg-blue-100"
-                                            onClick={() => {
-                                                setForm(prev => ({
-                                                    ...prev,
-                                                    startDate: d.start.toISOString().split("T")[0],
-                                                    endDate: d.start.toISOString().split("T")[0]
-                                                }));
-                                                setVehicleConflictModal(null);
-                                            }}
-                                        >
-                                            {d.start.toLocaleDateString()}
-                                        </div>
-                                    ))}
-                                </div>
-
                             </div>
-
-                        </div>
-
+                        ))}
                     </div>
                 </div>
             )}
