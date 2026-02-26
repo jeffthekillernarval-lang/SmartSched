@@ -187,8 +187,13 @@ export default function Drivers() {
                         name="contactNumber"
                         placeholder="Contact Number"
                         maxLength={11}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         value={form.contactNumber}
-                        onChange={handleChange}
+                        onChange={(e) => {
+                            const onlyNums = e.target.value.replace(/\D/g, '');
+                            setForm({ ...form, contactNumber: onlyNums });
+                        }}
                         className="border px-3 py-2 rounded-lg"
                         required
                     />

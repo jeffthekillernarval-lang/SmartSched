@@ -157,9 +157,11 @@ router.post("/", async (req, res) => {
     }
 
 
-    /* ==================================================
+    /* 
+    ==================================================
        LOOKUPS (FOR CONTEXT)
-    ================================================== */
+    ================================================== 
+    */
 
     const vehicleResult = await pool.query(
         `SELECT id, vehicle_name FROM "Vehicles" WHERE enabled = true`
@@ -287,66 +289,68 @@ Time: ${b.start_datetime?.toISOString().slice(11, 16)}–${b.end_datetime?.toISO
         }
     }
 
-    /* ==================================================
+    /* 
+    ==================================================
        SYSTEM PROMPT
-    ================================================== */
+    ================================================== 
+    */
 
     const systemPrompt = `
-You are a helpful booking assistant.
+        You are a helpful booking assistant.
 
-You can chat naturally.
+        You can chat naturally.
 
-ONLY when the user clearly wants to create a booking,
-respond with JSON ONLY using ONE of these formats.
+        ONLY when the user clearly wants to create a booking,
+        respond with JSON ONLY using ONE of these formats.
 
-Facility names are provided alongside their IDs.
-Always refer to facilities by name when replying to users.
+        Facility names are provided alongside their IDs.
+        Always refer to facilities by name when replying to users.
 
-FACILITY:
-{
-  "intent": "create_booking",
-  "resource_type": "facility",
-  "schedules": [{ "date": "YYYY-MM-DD", "startTime": "HH:MM", "endTime": "HH:MM" }],
-  "event_name": "",
-  "event_facility": "number",
-  "requested_by": "",
-  "organization": "",
-  "contact": "",
-  "reservation": false,
-  "insider": false
-}
+        FACILITY:
+        {
+        "intent": "create_booking",
+        "resource_type": "facility",
+        "schedules": [{ "date": "YYYY-MM-DD", "startTime": "HH:MM", "endTime": "HH:MM" }],
+        "event_name": "",
+        "event_facility": "number",
+        "requested_by": "",
+        "organization": "",
+        "contact": "",
+        "reservation": false,
+        "insider": false
+        }
 
-VEHICLE:
-{
-  "intent": "create_booking",
-  "resource_type": "vehicle",
-  "vehicle_id": "number",
-  "driver_id": null,
-  "requestor": "",
-  "department_id": "number",
-  "schedule": {
-     "date": "YYYY-MM-DD",
-     "startTime": "HH:MM",
-     "endTime": "HH:MM"
-  },
-  "purpose": "",
-  "destination": ""
-}
-EQUIPMENT:
-{
-  "intent": "create_booking",
-  "resource_type": "equipment",
-  "equipments": [
-    { "equipmentId": "number" }
-  ],
-  "quantity": "number",
-  "department_id": "number",
-  "facility_id": "number",
-  "dates": ["YYYY-MM-DD"],
-  "time_start": "HH:MM",
-  "time_end": "HH:MM",
-  "purpose": ""
-}
+        VEHICLE:
+        {
+        "intent": "create_booking",
+        "resource_type": "vehicle",
+        "vehicle_id": "number",
+        "driver_id": null,
+        "requestor": "",
+        "department_id": "number",
+        "schedule": {
+            "date": "YYYY-MM-DD",
+            "startTime": "HH:MM",
+            "endTime": "HH:MM"
+        },
+        "purpose": "",
+        "destination": ""
+        }
+        EQUIPMENT:
+        {
+        "intent": "create_booking",
+        "resource_type": "equipment",
+        "equipments": [
+            { "equipmentId": "number" }
+        ],
+        "quantity": "number",
+        "department_id": "number",
+        "facility_id": "number",
+        "dates": ["YYYY-MM-DD"],
+        "time_start": "HH:MM",
+        "time_end": "HH:MM",
+        "purpose": ""
+        }
 
 
 Current time: ${currentDateTime}
@@ -1114,36 +1118,6 @@ ${formattedBookings.join("\n") || "None"}
                 endpoint = "/api/create-equipment-booking";
             if (!endpoint) throw new Error("Unknown resource type");
             /* ==================================================
-               EQUIPMENT NAME → EQUIPMENT ID (DYNAMIC)
-            ================================================== */
-
-            // if (
-            //     bookingData.resource_type === "equipment" &&
-            //     (!bookingData.equipment_type_id || isNaN(Number(bookingData.equipment_type_id)))
-            // ) {
-            //     const equipmentsResult = await pool.query(
-            //         `SELECT id, name FROM "Equipments" WHERE enabled = true`
-            //     );
-
-            //     const messageLower = message.toLowerCase();
-
-            //     for (const eq of equipmentsResult.rows) {
-            //         if (messageLower.includes(eq.name.toLowerCase())) {
-            //             bookingData.equipment_type_id = eq.id;
-            //             break;
-            //         }
-            //     }
-            // }
-
-            // if (
-            //     bookingData.resource_type === "equipment" &&
-            //     (!bookingData.equipment_type_id || isNaN(Number(bookingData.equipment_type_id)))
-            // ) {
-            //     throw new Error(
-            //         "Equipment could not be identified. Please specify the equipment name."
-            //     );
-            // }
-            /* ==================================================
                FACILITY NAME → FACILITY ID (DYNAMIC, SUPPORTS NUMBERS)
             ================================================== */
             if (bookingData.resource_type === "facility") {
@@ -1377,9 +1351,11 @@ ${formattedBookings.join("\n") || "None"}
 
     }
 
-    /* ==================================================
+    /* 
+    ==================================================
        NORMAL CHAT
-    ================================================== */
+    ==================================================
+     */
 
     return res.json({ reply: aiReply });
 });
