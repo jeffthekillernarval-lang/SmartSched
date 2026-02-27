@@ -5,7 +5,10 @@ require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 5000;
+const { types } = require('pg');
 
+// 1082 = PostgreSQL DATE type
+types.setTypeParser(1082, (val) => val);
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL
 });

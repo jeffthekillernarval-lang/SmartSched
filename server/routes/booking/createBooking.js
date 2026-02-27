@@ -47,8 +47,52 @@ router.post('/', async (req, res) => {
         const facilityId = Number(event_facility);
 
         for (const s of schedules) {
-            if (!s.date || !s.startTime || !s.endTime) {
-                throw new Error('Invalid or missing schedule data.');
+            if (!s?.date || !s?.startTime || !s?.endTime) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Please complete date and time properly.'
+                });
+            }
+
+            /* ===============================
+               DATE VALIDATION (TOMORROW ONLY)
+            ================================ */
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const selectedDate = new Date(s.date);
+            selectedDate.setHours(0, 0, 0, 0);
+
+            if (selectedDate <= today) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Bookings must be scheduled for tomorrow or later.'
+                });
+            }
+
+            /* ===============================
+               TIME VALIDATION (4AM–10PM)
+            ================================ */
+
+            const startMinutes = toMinutes(s.startTime);
+            const endMinutes = toMinutes(s.endTime);
+
+            const OPEN = 4 * 60;   // 04:00
+            const CLOSE = 22 * 60; // 22:00
+
+            if (startMinutes < OPEN || endMinutes > CLOSE) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Bookings are allowed only between 4:00 AM and 10:00 PM.'
+                });
+            }
+
+            if (endMinutes <= startMinutes) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'End time must be later than start time.'
+                });
             }
 
             /* ===============================

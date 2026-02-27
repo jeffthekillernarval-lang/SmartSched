@@ -106,3 +106,27 @@ CREATE INDEX IF NOT EXISTS idx_vehicle_time
     ON public."VehicleBooking" USING btree
     (vehicle_id ASC NULLS LAST, start_datetime ASC NULLS LAST, end_datetime ASC NULLS LAST)
     TABLESPACE pg_default;
+
+
+    -- Table: public.Drivers
+
+-- DROP TABLE IF EXISTS public."Drivers";
+
+CREATE TABLE IF NOT EXISTS public."Drivers"
+(
+    id integer NOT NULL DEFAULT nextval('"Drivers_id_seq"'::regclass),
+    name text COLLATE pg_catalog."default" NOT NULL,
+    age integer,
+    gender text COLLATE pg_catalog."default",
+    contact_number text COLLATE pg_catalog."default",
+    enabled boolean DEFAULT true,
+    liscence_id_number text COLLATE pg_catalog."default",
+    CONSTRAINT "Drivers_pkey" PRIMARY KEY (id),
+    CONSTRAINT unique_driver_name UNIQUE (name),
+    CONSTRAINT unique_license UNIQUE (liscence_id_number)
+)
+
+TABLESPACE pg_default;
+
+ALTER TABLE IF EXISTS public."Drivers"
+    OWNER to postgres;
