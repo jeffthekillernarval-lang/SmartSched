@@ -639,29 +639,26 @@ export default function EquipmentBooking() {
                                                         (!equipmentForm.rangeStart || !equipmentForm.rangeEnd)
                                                     )
                                                 }
-
                                             >
-                                                {/* <option value="">
-                                                    {!equipmentForm.date || !equipmentForm.timeStart || !equipmentForm.timeEnd
-                                                        ? "Select date & time first"
-                                                        : "Select Equipment"}
+                                                {/* ✅ DEFAULT MESSAGE OPTION */}
+                                                <option value="">
+                                                    {!equipmentForm.timeStart || !equipmentForm.timeEnd
+                                                        ? "Select time first"
+                                                        : (
+                                                            (equipmentForm.mode === 'single' && !equipmentForm.date) ||
+                                                            (equipmentForm.mode === 'specific' && !equipmentForm.specificDates.some(Boolean)) ||
+                                                            (equipmentForm.mode === 'range' && (!equipmentForm.rangeStart || !equipmentForm.rangeEnd))
+                                                        )
+                                                            ? "Select date first"
+                                                            : "Select Equipment"}
                                                 </option>
-                                                {getFilteredEquipmentsForDropdown(index).map(e => (
-                                                    <option key={e.id} value={e.id}>
-                                                        {e.name} ({e.model_id})
-                                                    </option>
-                                                ))} */}
-                                                {getFilteredEquipmentsForDropdown(index).map(e => {
 
+                                                {getFilteredEquipmentsForDropdown(index).map(e => {
                                                     let label = `${e.name} (${e.model_id})`;
                                                     let disabled = false;
 
                                                     if (e.availability === "conflict") {
                                                         disabled = true;
-
-                                                        // const overlapText = e.overlaps
-                                                        //     .map(o => `${o.timeStart?.slice(0, 5)}–${o.timeEnd?.slice(0, 5)}`)
-                                                        //     .join(", ");
                                                         const overlapText = e.overlaps
                                                             .map(o => `${o.timeStart?.slice(0, 5)}–${o.timeEnd?.slice(0, 5)} (${o.purpose})`)
                                                             .join(", ");
